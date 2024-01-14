@@ -6,11 +6,12 @@ const rtweekend = @import("rtweekend.zig");
 const hittable = @import("hittable.zig");
 const hittable_list = @import("hittable_list.zig");
 const sphere = @import("sphere.zig");
+const interval = @import("interval.zig");
 
-fn rayColor(r: ray.Ray, world: *hittable_list.HittableList) vec3.Vec3 {
+fn rayColor(r: ray.Ray, world: anytype) vec3.Vec3 {
     var rec = hittable.HitRecord{};
 
-    if (world.hit(r, 0, rtweekend.infinity, &rec)) {
+    if (world.hit(r, interval.Interval{ .min = 0 }, &rec)) {
         return vec3.mul(0.5, vec3.add(rec.normal, vec3.Vec3{ .x = 1, .y = 1, .z = 1 }));
     }
 
@@ -39,12 +40,12 @@ pub fn main() !void {
     std.debug.print("Image is {d}x{d}\n", .{ image_width, image_height });
 
     // World
-
-    var world = hittable_list.HittableList{ .objects = std.ArrayList(*hittable.HitRecord).init(allocator) };
-    // TODO Ok the problem here is that I'm supposed tto pass a sphere as it's a hittable.
-    // TODO I probably have to change the argument to hittablelist so that's a anytype with a hit method.
-    world.add(sphere.Sphere{ .center = vec3.Vec3{ .z = -1 }, .radius = 0.5 });
-    world.add(sphere.Sphere{ .center = vec3.Vec3{ .y = -100.5, .z = -1 }, .radius = 100 });
+    // TODO: this world can only have one type! (I think)
+    var world = hittable_list.hittableList(sphere.Sphere){ .objects = std.ArrayList(sphere.Sphere).init(allocator) };
+    var sphere1 = sphere.Sphere{ .center = vec3.Vec3{ .z = -1 }, .radius = 0.5 };
+    var sphere2 = sphere.Sphere{ .center = vec3.Vec3{ .y = -100.5, .z = -1 }, .radius = 100 };
+    try world.add(&sphere1);
+    try world.add(&sphere2);
 
     // Camera
     const focal_length: f32 = 1.0;
