@@ -2,27 +2,18 @@ const std = @import("std");
 const vec3 = @import("vec3.zig");
 const color = @import("color.zig");
 const ray = @import("ray.zig");
+const rtweekend = @import("rtweekend.zig");
+const hittable = @import("hittable.zig");
+const hittable_list = @import("hittable_list.zig");
+const sphere = @import("sphere.zig");
 
-fn hitSphere(center: vec3.Vec3, radius: f32, r: ray.Ray) f32 {
-    const oc = vec3.sub(r.origin, center);
-    const a = vec3.dot(r.direction, r.direction);
-    const b = 2.0 * vec3.dot(oc, r.direction);
-    const c = vec3.dot(oc, oc) - radius * radius;
-    const discriminant = b * b - 4 * a * c;
+fn rayColor(r: ray.Ray, world: *hittable_list.HittableList) vec3.Vec3 {
+    var rec = hittable.HitRecord{};
 
-    if (discriminant < 0) {
-        return -1.0;
-    } else {
-        return ((-b - @sqrt(discriminant)) / (2.0 * a));
+    if (world.hit(r, 0, rtweekend.infinity, &rec)) {
+        return vec3.mul(0.5, vec3.add(rec.normal, vec3.Vec3{ .x = 1, .y = 1, .z = 1 }));
     }
-}
 
-fn rayColor(r: ray.Ray) vec3.Vec3 {
-    const t = hitSphere(vec3.Vec3{ .z = -1 }, 0.5, r);
-    if (t > 0.0) {
-        const n = vec3.unitVector(vec3.sub(r.at(t), vec3.Vec3{ .z = -1 }));
-        return vec3.mul(0.5, vec3.Vec3{ .x = n.x + 1, .y = n.y + 1, .z = n.z + 1 });
-    }
     const unit_direction = vec3.unitVector(r.direction);
     const a: f32 = 0.5 * (unit_direction.y + 1.0);
     return vec3.add(vec3.mul(1.0 - a, vec3.Vec3{ .x = 1, .y = 1, .z = 1 }), vec3.mul(a, vec3.Vec3{ .x = 0.5, .y = 0.7, .z = 1.0 }));
@@ -33,6 +24,9 @@ fn toFloat(v: u32) f32 {
 }
 
 pub fn main() !void {
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
 
     // Image
     const aspect_ratio: f32 = 16.0 / 9.0;
@@ -43,6 +37,14 @@ pub fn main() !void {
     if (image_height < 1) image_height = 1;
 
     std.debug.print("Image is {d}x{d}\n", .{ image_width, image_height });
+
+    // World
+
+    var world = hittable_list.HittableList{ .objects = std.ArrayList(*hittable.HitRecord).init(allocator) };
+    // TODO Ok the problem here is that I'm supposed tto pass a sphere as it's a hittable.
+    // TODO I probably have to change the argument to hittablelist so that's a anytype with a hit method.
+    world.add(sphere.Sphere{ .center = vec3.Vec3{ .z = -1 }, .radius = 0.5 });
+    world.add(sphere.Sphere{ .center = vec3.Vec3{ .y = -100.5, .z = -1 }, .radius = 100 });
 
     // Camera
     const focal_length: f32 = 1.0;
@@ -89,7 +91,7 @@ pub fn main() !void {
             const ray_direction = vec3.sub(pixel_center, camera_center);
             const r = ray.Ray{ .origin = camera_center, .direction = ray_direction };
             // TODO the argument?
-            const pixel_color = rayColor(r);
+            const pixel_color = rayColor(r, world);
 
             try color.writeColor(stdout, pixel_color);
         }
