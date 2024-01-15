@@ -34,8 +34,7 @@ pub const Camera = struct {
                 var k: u8 = 0;
                 while (k < self.samples_per_pixel) : (k += 1) {
                     const r = self.getRay(i, j);
-                    _ = pixel_color.plus(rayColor(r, world));
-                    // pixel_color = vec3.add(pixel_color, rayColor(r, world));
+                    pixel_color = vec3.add(pixel_color, rayColor(r, world));
                 }
 
                 try color.writeColor(stdout, pixel_color, self.samples_per_pixel);
@@ -91,7 +90,9 @@ pub const Camera = struct {
         var rec = hittable.HitRecord{};
 
         if (world.hit(r, interval.Interval{ .min = 0 }, &rec)) {
-            return vec3.mul(0.5, vec3.add(rec.normal, vec3.Vec3{ .x = 1, .y = 1, .z = 1 }));
+            const direction = vec3.randomOnHemisphere(rec.normal);
+            const newColor = rayColor(ray.Ray{ .origin = rec.p, .direction = direction }, world);
+            return vec3.mul(0.5, newColor);
         }
 
         const unit_direction = vec3.unitVector(r.direction);

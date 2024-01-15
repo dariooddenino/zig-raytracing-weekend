@@ -1,4 +1,5 @@
 const std = @import("std");
+const rtweekend = @import("rtweekend.zig");
 
 pub const Vec3 = struct {
     x: f32 = 0,
@@ -91,6 +92,35 @@ pub inline fn cross(u: Vec3, v: Vec3) Vec3 {
 
 pub inline fn unitVector(v: Vec3) Vec3 {
     return div(v, v.length());
+}
+
+pub inline fn random() Vec3 {
+    return Vec3{ .x = rtweekend.randomDouble(), .y = rtweekend.randomDouble(), .z = rtweekend.randomDouble() };
+}
+
+pub inline fn randomRange(min: f32, max: f32) Vec3 {
+    return Vec3{ .x = rtweekend.randomDoubleRange(min, max), .y = rtweekend.randomDoubleRange(min, max), .z = rtweekend.randomDoubleRange(min, max) };
+}
+
+pub inline fn randomInUnitSphere() Vec3 {
+    var vec = Vec3{};
+    while (true) {
+        vec = randomRange(-1, 1);
+        if (vec.lengthSquared() < 1) break;
+    }
+    return vec;
+}
+
+pub inline fn randomUnitVector() Vec3 {
+    return unitVector(randomInUnitSphere());
+}
+
+pub inline fn randomOnHemisphere(normal: Vec3) Vec3 {
+    const on_unit_sphere = randomUnitVector();
+    if (dot(on_unit_sphere, normal) > 0.0) // In the same hemisphere
+        return on_unit_sphere;
+
+    return mul(on_unit_sphere, -1.0);
 }
 
 // TODO div, dot, cross, unitvector
