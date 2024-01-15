@@ -39,6 +39,7 @@ pub fn main() !void {
     var cam = camera.Camera{};
     cam.aspect_ratio = 16.0 / 9.0;
     cam.image_width = 400;
+    cam.samples_per_pixel = 100;
     try cam.render(stdout, world);
 
     // try stdout.print("Run `zig build test` to run the tests.\n", .{});
