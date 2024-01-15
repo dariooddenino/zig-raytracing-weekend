@@ -16,9 +16,11 @@ pub fn main() !void {
 
     // World
     // TODO: this world can only have one type! (I think)
-    var world = hittable_list.hittableList(sphere.Sphere){ .objects = std.ArrayList(sphere.Sphere).init(allocator) };
+    var world = hittable_list.HittableList{ .objects = std.ArrayList(sphere.Sphere).init(allocator) };
     var sphere1 = sphere.Sphere{ .center = vec3.Vec3{ .z = -1 }, .radius = 0.5 };
+    // var sphere1O = hittable_list.HittableObject{ .sphere = &sphere1 };
     var sphere2 = sphere.Sphere{ .center = vec3.Vec3{ .y = -100.5, .z = -1 }, .radius = 100 };
+    // var sphere2O = hittable_list.HittableObject{ .sphere = &sphere2 };
     try world.add(&sphere1);
     try world.add(&sphere2);
 
