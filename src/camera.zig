@@ -21,7 +21,6 @@ pub const Camera = struct {
 
     pub fn render(self: *Camera, stdout: anytype, world: anytype) !void {
         self.initialize();
-
         try stdout.print("P3\n{d} {d}\n255\n", .{ self.image_width, self.image_height });
 
         var j: u16 = 0;
@@ -61,12 +60,12 @@ pub const Camera = struct {
         const viewport_v: vec3.Vec3 = vec3.Vec3{ .y = -viewport_height };
 
         // Calculate the horizontal and vertical delta vectors from pixel to pixel.
-        const pixel_delta_u = vec3.div(viewport_u, toFloat(self.image_width));
-        const pixel_delta_v = vec3.div(viewport_v, toFloat(self.image_height));
+        self.pixel_delta_u = vec3.div(viewport_u, toFloat(self.image_width));
+        self.pixel_delta_v = vec3.div(viewport_v, toFloat(self.image_height));
 
         // Calculate the location of the upper left pixel.
         const viewport_upper_left = vec3.sub(vec3.sub(vec3.sub(self.center, vec3.Vec3{ .z = focal_length }), vec3.div(viewport_u, 2.0)), vec3.div(viewport_v, 2.0));
-        self.pixel00_loc = vec3.add(viewport_upper_left, vec3.mul(0.5, vec3.add(pixel_delta_u, pixel_delta_v)));
+        self.pixel00_loc = vec3.add(viewport_upper_left, vec3.mul(0.5, vec3.add(self.pixel_delta_u, self.pixel_delta_v)));
     }
 
     pub fn rayColor(r: ray.Ray, world: anytype) vec3.Vec3 {
