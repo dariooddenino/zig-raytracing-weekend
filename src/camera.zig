@@ -6,9 +6,7 @@ const ray = @import("ray.zig");
 const hittable = @import("hittable.zig");
 const interval = @import("interval.zig");
 
-fn toFloat(v: u32) f32 {
-    return @as(f32, @floatFromInt(v));
-}
+const toFloat = rtweekend.toFloat;
 
 pub const Camera = struct {
     aspect_ratio: f32 = 1.0,
@@ -18,6 +16,7 @@ pub const Camera = struct {
     pixel00_loc: vec3.Vec3 = undefined,
     pixel_delta_u: vec3.Vec3 = undefined,
     pixel_delta_v: vec3.Vec3 = undefined,
+    samples_per_pixel: u8 = 10,
 
     pub fn render(self: *Camera, stdout: anytype, world: anytype) !void {
         self.initialize();
@@ -31,20 +30,22 @@ pub const Camera = struct {
             std.debug.print("\rScanlines remaining: {d}", .{self.image_height - j});
 
             while (i < self.image_width) : (i += 1) {
-                const pixel_center = vec3.add(self.pixel00_loc, vec3.add(vec3.mul(toFloat(i), self.pixel_delta_u), vec3.mul(toFloat(j), self.pixel_delta_v)));
-                const ray_direction = vec3.sub(pixel_center, self.center);
-                const r = ray.Ray{ .origin = self.center, .direction = ray_direction };
-                // TODO the argument?
-                const pixel_color = rayColor(r, world);
+                var pixel_color = vec3.Vec3{};
+                var k: u8 = 0;
+                while (k < self.samples_per_pixel) : (k += 1) {
+                    const r = self.getRay(i, j);
+                    _ = pixel_color.plus(rayColor(r, world));
+                    // pixel_color = vec3.add(pixel_color, rayColor(r, world));
+                }
 
-                try color.writeColor(stdout, pixel_color);
+                try color.writeColor(stdout, pixel_color, self.samples_per_pixel);
             }
         }
 
         // std.debug.print("\rDone.          \n", .{});
     }
 
-    pub fn initialize(self: *Camera) void {
+    fn initialize(self: *Camera) void {
         self.image_height = @intFromFloat(@round(toFloat(self.image_width) / self.aspect_ratio));
         if (self.image_height < 1) self.image_height = 1;
 
@@ -68,7 +69,25 @@ pub const Camera = struct {
         self.pixel00_loc = vec3.add(viewport_upper_left, vec3.mul(0.5, vec3.add(self.pixel_delta_u, self.pixel_delta_v)));
     }
 
-    pub fn rayColor(r: ray.Ray, world: anytype) vec3.Vec3 {
+    fn getRay(self: Camera, i: u16, j: u16) ray.Ray {
+        // Get a randomly sampled camera ray for the pixel at location i,j.
+        const pixel_center = vec3.add(self.pixel00_loc, vec3.add(vec3.mul(toFloat(i), self.pixel_delta_u), vec3.mul(toFloat(j), self.pixel_delta_v)));
+        const pixel_sample = vec3.add(pixel_center, self.pixelSampleSquare());
+
+        const ray_origin = self.center;
+        const ray_direction = vec3.sub(pixel_sample, ray_origin);
+
+        return ray.Ray{ .origin = ray_origin, .direction = ray_direction };
+    }
+
+    fn pixelSampleSquare(self: Camera) vec3.Vec3 {
+        // Returns a random point in the square surrounding a pixel at the origin.
+        const px = -0.5 + rtweekend.randomDouble();
+        const py = -0.5 + rtweekend.randomDouble();
+        return (vec3.add(vec3.mul(px, self.pixel_delta_u), vec3.mul(py, self.pixel_delta_v)));
+    }
+
+    fn rayColor(r: ray.Ray, world: anytype) vec3.Vec3 {
         var rec = hittable.HitRecord{};
 
         if (world.hit(r, interval.Interval{ .min = 0 }, &rec)) {
