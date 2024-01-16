@@ -3,6 +3,10 @@ const vec3 = @import("vec3.zig");
 const interval = @import("interval.zig");
 const rtweekend = @import("rtweekend.zig");
 
+fn linearToGamma(linear_component: f32) f32 {
+    return @sqrt(linear_component);
+}
+
 pub fn writeColor(stdout: anytype, pixel_color: vec3.Vec3, samples_per_pixel: u8) !void {
     var r = pixel_color.x;
     var g = pixel_color.y;
@@ -13,6 +17,11 @@ pub fn writeColor(stdout: anytype, pixel_color: vec3.Vec3, samples_per_pixel: u8
     r *= scale;
     g *= scale;
     b *= scale;
+
+    // Apply the linear to gamma transform
+    r = linearToGamma(r);
+    g = linearToGamma(g);
+    b = linearToGamma(b);
 
     const intensity = interval.Interval{ .max = 0.999 };
 

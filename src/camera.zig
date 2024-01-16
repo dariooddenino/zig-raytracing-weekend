@@ -95,7 +95,8 @@ pub const Camera = struct {
         }
 
         if (world.hit(r, interval.Interval{ .min = 0.001 }, &rec)) {
-            const direction = vec3.randomOnHemisphere(rec.normal);
+            const direction = vec3.add(rec.normal, vec3.randomUnitVector());
+            // const direction = vec3.randomOnHemisphere(rec.normal);
             const newColor = rayColor(ray.Ray{ .origin = rec.p, .direction = direction }, depth - 1, world);
             return vec3.mul(0.5, newColor);
         }
