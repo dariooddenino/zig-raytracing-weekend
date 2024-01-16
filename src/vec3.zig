@@ -132,6 +132,13 @@ pub fn reflect(v: Vec3, n: Vec3) Vec3 {
     return sub(v, mul(2.0, mul(dot(v, n), n)));
 }
 
+pub fn refract(uv: Vec3, n: Vec3, etai_over_etat: f32) Vec3 {
+    const cos_theta = @min(dot(mul(-1.0, uv), n), 1.0);
+    const r_out_perp = mul(etai_over_etat, (add(uv, mul(cos_theta, n))));
+    const r_out_parallel = mul(-@sqrt(@abs(1.0 - r_out_perp.lengthSquared())), n);
+    return add(r_out_perp, r_out_parallel);
+}
+
 // TODO div, dot, cross, unitvector
 
 const expectEqual = std.testing.expectEqual;

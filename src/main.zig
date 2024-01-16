@@ -21,17 +21,19 @@ pub fn main() !void {
 
     var material_ground = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{ .x = 0.8, .y = 0.8 }) };
     var material_center = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{ .x = 0.7, .y = 0.3, .z = 0.3 }) };
-    var material_left = material.Material{ .metal = material.Metal.fromColor(vec3.Vec3{ .x = 0.8, .y = 0.8, .z = 0.8 }) };
-    var material_right = material.Material{ .metal = material.Metal.fromColor(vec3.Vec3{ .x = 0.8, .y = 0.6, .z = 0.2 }) };
+    var material_left = material.Material{ .dielectric = material.Dielectric{ .ir = 1.5 } };
+    var material_right = material.Material{ .metal = material.Metal.fromColor(vec3.Vec3{ .x = 0.8, .y = 0.6, .z = 0.2 }, 1.0) };
 
     var sphere1 = sphere.Sphere{ .center = vec3.Vec3{ .z = -1 }, .radius = 0.5, .mat = &material_center };
     var sphere2 = sphere.Sphere{ .center = vec3.Vec3{ .y = -100.5, .z = -1 }, .radius = 100, .mat = &material_ground };
-    var sphere3 = sphere.Sphere{ .center = vec3.Vec3{ .x = -1, .z = -1 }, .radius = 0.5, .mat = &material_left };
+    var sphere3 = sphere.Sphere{ .center = vec3.Vec3{ .x = -0.4, .z = -0.5 }, .radius = 0.5, .mat = &material_left };
+    var sphere3i = sphere.Sphere{ .center = vec3.Vec3{ .x = -0.4, .z = -0.5 }, .radius = -0.4, .mat = &material_left };
     var sphere4 = sphere.Sphere{ .center = vec3.Vec3{ .x = 1, .z = -1 }, .radius = 0.5, .mat = &material_right };
 
     try world.add(&sphere1);
     try world.add(&sphere2);
     try world.add(&sphere3);
+    try world.add(&sphere3i);
     try world.add(&sphere4);
 
     // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
