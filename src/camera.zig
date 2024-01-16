@@ -17,6 +17,7 @@ pub const Camera = struct {
     pixel_delta_u: vec3.Vec3 = undefined,
     pixel_delta_v: vec3.Vec3 = undefined,
     samples_per_pixel: u8 = 10,
+    max_depth: u8 = 10,
 
     pub fn render(self: *Camera, stdout: anytype, world: anytype) !void {
         self.initialize();
@@ -34,7 +35,7 @@ pub const Camera = struct {
                 var k: u8 = 0;
                 while (k < self.samples_per_pixel) : (k += 1) {
                     const r = self.getRay(i, j);
-                    pixel_color = vec3.add(pixel_color, rayColor(r, world));
+                    pixel_color = vec3.add(pixel_color, rayColor(r, self.max_depth, world));
                 }
 
                 try color.writeColor(stdout, pixel_color, self.samples_per_pixel);
@@ -86,12 +87,16 @@ pub const Camera = struct {
         return (vec3.add(vec3.mul(px, self.pixel_delta_u), vec3.mul(py, self.pixel_delta_v)));
     }
 
-    fn rayColor(r: ray.Ray, world: anytype) vec3.Vec3 {
+    fn rayColor(r: ray.Ray, depth: u8, world: anytype) vec3.Vec3 {
         var rec = hittable.HitRecord{};
+
+        if (depth <= 0) {
+            return vec3.Vec3{};
+        }
 
         if (world.hit(r, interval.Interval{ .min = 0 }, &rec)) {
             const direction = vec3.randomOnHemisphere(rec.normal);
-            const newColor = rayColor(ray.Ray{ .origin = rec.p, .direction = direction }, world);
+            const newColor = rayColor(ray.Ray{ .origin = rec.p, .direction = direction }, depth - 1, world);
             return vec3.mul(0.5, newColor);
         }
 
