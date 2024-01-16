@@ -55,6 +55,11 @@ pub const Vec3 = struct {
     pub inline fn length(self: Vec3) f32 {
         return std.math.sqrt(self.lengthSquared());
     }
+
+    pub fn nearZero(self: Vec3) bool {
+        const s = 1e-8;
+        return (@abs(self.x) < s) and (@abs(self.y) < s) and (@abs(self.z) < s);
+    }
 };
 
 // << non ho idea di cosa sia, forse per stampare.
@@ -121,6 +126,10 @@ pub inline fn randomOnHemisphere(normal: Vec3) Vec3 {
         return on_unit_sphere;
 
     return mul(on_unit_sphere, -1.0);
+}
+
+pub fn reflect(v: Vec3, n: Vec3) Vec3 {
+    return sub(v, mul(2.0, mul(dot(v, n), n)));
 }
 
 // TODO div, dot, cross, unitvector

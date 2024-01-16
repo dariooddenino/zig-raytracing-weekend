@@ -3,10 +3,12 @@ const vec3 = @import("vec3.zig");
 const ray = @import("ray.zig");
 const hittable = @import("hittable.zig");
 const interval = @import("interval.zig");
+const material = @import("material.zig");
 
 pub const Sphere = struct {
     center: vec3.Vec3,
     radius: f32,
+    mat: *material.Material,
 
     pub fn hit(self: Sphere, r: ray.Ray, ray_t: interval.Interval, rec: *hittable.HitRecord) bool {
         const oc = vec3.sub(r.origin, self.center);
@@ -30,6 +32,7 @@ pub const Sphere = struct {
         rec.p = r.at(rec.t);
         const outward_normal = vec3.div(vec3.sub(rec.p, self.center), self.radius);
         rec.setFaceNormal(r, outward_normal);
+        rec.mat = self.mat;
 
         return true;
     }

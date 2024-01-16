@@ -8,6 +8,7 @@ const hittable_list = @import("hittable_list.zig");
 const sphere = @import("sphere.zig");
 const interval = @import("interval.zig");
 const camera = @import("camera.zig");
+const material = @import("material.zig");
 
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -17,12 +18,21 @@ pub fn main() !void {
     // World
     // TODO: this world can only have one type! (I think)
     var world = hittable_list.HittableList{ .objects = std.ArrayList(sphere.Sphere).init(allocator) };
-    var sphere1 = sphere.Sphere{ .center = vec3.Vec3{ .z = -1 }, .radius = 0.5 };
-    // var sphere1O = hittable_list.HittableObject{ .sphere = &sphere1 };
-    var sphere2 = sphere.Sphere{ .center = vec3.Vec3{ .y = -100.5, .z = -1 }, .radius = 100 };
-    // var sphere2O = hittable_list.HittableObject{ .sphere = &sphere2 };
+
+    var material_ground = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{ .x = 0.8, .y = 0.8 }) };
+    var material_center = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{ .x = 0.7, .y = 0.3, .z = 0.3 }) };
+    var material_left = material.Material{ .metal = material.Metal.fromColor(vec3.Vec3{ .x = 0.8, .y = 0.8, .z = 0.8 }) };
+    var material_right = material.Material{ .metal = material.Metal.fromColor(vec3.Vec3{ .x = 0.8, .y = 0.6, .z = 0.2 }) };
+
+    var sphere1 = sphere.Sphere{ .center = vec3.Vec3{ .z = -1 }, .radius = 0.5, .mat = &material_center };
+    var sphere2 = sphere.Sphere{ .center = vec3.Vec3{ .y = -100.5, .z = -1 }, .radius = 100, .mat = &material_ground };
+    var sphere3 = sphere.Sphere{ .center = vec3.Vec3{ .x = -1, .z = -1 }, .radius = 0.5, .mat = &material_left };
+    var sphere4 = sphere.Sphere{ .center = vec3.Vec3{ .x = 1, .z = -1 }, .radius = 0.5, .mat = &material_right };
+
     try world.add(&sphere1);
     try world.add(&sphere2);
+    try world.add(&sphere3);
+    try world.add(&sphere4);
 
     // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
     // std.debug.print("All your {s} are belong to us.\n", .{"codebase"});

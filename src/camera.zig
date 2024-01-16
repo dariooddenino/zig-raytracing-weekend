@@ -5,6 +5,7 @@ const vec3 = @import("vec3.zig");
 const ray = @import("ray.zig");
 const hittable = @import("hittable.zig");
 const interval = @import("interval.zig");
+const material = @import("material.zig");
 
 const toFloat = rtweekend.toFloat;
 
@@ -95,10 +96,18 @@ pub const Camera = struct {
         }
 
         if (world.hit(r, interval.Interval{ .min = 0.001 }, &rec)) {
-            const direction = vec3.add(rec.normal, vec3.randomUnitVector());
-            // const direction = vec3.randomOnHemisphere(rec.normal);
-            const newColor = rayColor(ray.Ray{ .origin = rec.p, .direction = direction }, depth - 1, world);
-            return vec3.mul(0.5, newColor);
+            var scattered = ray.Ray{};
+            var attenuation = vec3.Vec3{};
+            const mat = rec.mat;
+            if (mat.scatter(r, rec, &attenuation, &scattered))
+                return vec3.mul(attenuation, rayColor(scattered, depth - 1, world));
+
+            return vec3.Vec3{};
+
+            // const direction = vec3.add(rec.normal, vec3.randomUnitVector());
+            // // const direction = vec3.randomOnHemisphere(rec.normal);
+            // const newColor = rayColor(ray.Ray{ .origin = rec.p, .direction = direction }, depth - 1, world);
+            // return vec3.mul(0.5, newColor);
         }
 
         const unit_direction = vec3.unitVector(r.direction);
