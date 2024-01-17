@@ -17,7 +17,7 @@ pub const Camera = struct {
     pixel00_loc: vec3.Vec3 = undefined,
     pixel_delta_u: vec3.Vec3 = undefined,
     pixel_delta_v: vec3.Vec3 = undefined,
-    samples_per_pixel: u8 = 10,
+    samples_per_pixel: u16 = 10,
     max_depth: u8 = 10,
     vfov: f32 = 90,
     lookfrom: vec3.Vec3 = vec3.Vec3{ .z = -1 },
@@ -44,7 +44,7 @@ pub const Camera = struct {
 
             while (i < self.image_width) : (i += 1) {
                 var pixel_color = vec3.Vec3{};
-                var k: u8 = 0;
+                var k: u16 = 0;
                 while (k < self.samples_per_pixel) : (k += 1) {
                     const r = self.getRay(i, j);
                     pixel_color = vec3.add(pixel_color, rayColor(r, self.max_depth, world));
@@ -132,11 +132,6 @@ pub const Camera = struct {
                 return vec3.mul(attenuation, rayColor(scattered, depth - 1, world));
 
             return vec3.Vec3{};
-
-            // const direction = vec3.add(rec.normal, vec3.randomUnitVector());
-            // // const direction = vec3.randomOnHemisphere(rec.normal);
-            // const newColor = rayColor(ray.Ray{ .origin = rec.p, .direction = direction }, depth - 1, world);
-            // return vec3.mul(0.5, newColor);
         }
 
         const unit_direction = vec3.unitVector(r.direction);

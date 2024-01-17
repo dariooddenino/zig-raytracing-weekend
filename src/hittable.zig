@@ -6,7 +6,7 @@ const material = @import("material.zig");
 pub const HitRecord = struct {
     p: vec3.Vec3 = vec3.Vec3{},
     normal: vec3.Vec3 = vec3.Vec3{},
-    mat: *material.Material = undefined,
+    mat: material.Material = undefined, // NOTE was a pointer
     t: f32 = 0,
     front_face: bool = false,
 

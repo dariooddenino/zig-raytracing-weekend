@@ -8,7 +8,7 @@ const material = @import("material.zig");
 pub const Sphere = struct {
     center: vec3.Vec3,
     radius: f32,
-    mat: *material.Material,
+    mat: material.Material, // NOTE this was a pointer
 
     pub fn hit(self: Sphere, r: ray.Ray, ray_t: interval.Interval, rec: *hittable.HitRecord) bool {
         const oc = vec3.sub(r.origin, self.center);

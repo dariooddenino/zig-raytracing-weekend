@@ -7,7 +7,7 @@ fn linearToGamma(linear_component: f32) f32 {
     return @sqrt(linear_component);
 }
 
-pub fn writeColor(stdout: anytype, pixel_color: vec3.Vec3, samples_per_pixel: u8) !void {
+pub fn writeColor(stdout: anytype, pixel_color: vec3.Vec3, samples_per_pixel: u16) !void {
     var r = pixel_color.x;
     var g = pixel_color.y;
     var b = pixel_color.z;

@@ -15,29 +15,54 @@ pub fn main() !void {
     defer arena.deinit();
     const allocator = arena.allocator();
 
+    // TODO: do we need to pass the objects as references? I'm not sure tbh.
+    // NOTE I've been removing almost all pointers because they were making my life harder and I don't know what
+    // the point of using them actually was.
     // World
-    // TODO: this world can only have one type! (I think)
     var world = hittable_list.HittableList{ .objects = std.ArrayList(sphere.Sphere).init(allocator) };
 
-    var material_ground = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{ .x = 0.8, .y = 0.8 }) };
-    var material_center = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{ .x = 0.1, .y = 0.2, .z = 0.5 }) };
-    var material_left = material.Material{ .dielectric = material.Dielectric{ .ir = 1.5 } };
-    var material_right = material.Material{ .metal = material.Metal.fromColor(vec3.Vec3{ .x = 0.8, .y = 0.6, .z = 0.2 }, 0.1) };
+    const ground_material = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{ .x = 0.5, .y = 0.5, .z = 0.5 }) };
+    const ground = sphere.Sphere{ .center = vec3.Vec3{ .y = -1000, .z = -1 }, .radius = 1000, .mat = ground_material };
+    try world.add(ground);
 
-    var sphere1 = sphere.Sphere{ .center = vec3.Vec3{ .z = -1 }, .radius = 0.5, .mat = &material_center };
-    var sphere2 = sphere.Sphere{ .center = vec3.Vec3{ .y = -100.5, .z = -1 }, .radius = 100, .mat = &material_ground };
-    var sphere3 = sphere.Sphere{ .center = vec3.Vec3{ .x = -1, .z = -1 }, .radius = 0.5, .mat = &material_left };
-    var sphere3i = sphere.Sphere{ .center = vec3.Vec3{ .x = -1, .z = -1 }, .radius = -0.4, .mat = &material_left };
-    var sphere4 = sphere.Sphere{ .center = vec3.Vec3{ .x = 1, .z = -1 }, .radius = 0.5, .mat = &material_right };
+    var a: f32 = -9;
+    while (a < 9) : (a += 1) {
+        var b: f32 = -9;
+        while (b < 9) : (b += 1) {
+            const choose_mat = rtweekend.randomDouble();
+            const center = vec3.Vec3{ .x = a + 0.9 * rtweekend.randomDouble(), .y = 0.2, .z = b + 0.9 * rtweekend.randomDouble() };
 
-    try world.add(&sphere1);
-    try world.add(&sphere2);
-    try world.add(&sphere3);
-    try world.add(&sphere3i);
-    try world.add(&sphere4);
+            if ((vec3.sub(center, vec3.Vec3{ .x = 4, .y = 0.2 })).length() > 0.9) {
+                // TODO: this was a shared_ptr, not entirely sure why and how to replicate.
+                // var sphere_material = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{}) };
 
-    // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
-    // std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
+                if (choose_mat < 0.8) {
+                    // diffuse
+                    const albedo = vec3.mul(vec3.random(), vec3.random());
+                    const sphere_material = material.Material{ .lambertian = material.Lambertian.fromColor(albedo) };
+                    const spherei = sphere.Sphere{ .center = center, .radius = 0.2, .mat = sphere_material };
+                    try world.add(spherei);
+                } else if (choose_mat < 0.95) {
+                    // metal
+                    const albedo = vec3.randomRange(0.5, 1);
+                    const fuzz = rtweekend.randomDoubleRange(0, 0.5);
+                    const sphere_material = material.Material{ .metal = material.Metal.fromColor(albedo, fuzz) };
+                    try world.add(sphere.Sphere{ .center = center, .radius = 0.2, .mat = sphere_material });
+                } else {
+                    // glass
+                    const sphere_material = material.Material{ .dielectric = material.Dielectric{ .ir = 1.5 } };
+                    try world.add(sphere.Sphere{ .center = center, .radius = 0.2, .mat = sphere_material });
+                }
+            }
+        }
+    }
+
+    const material1 = material.Material{ .dielectric = material.Dielectric{ .ir = 1.5 } };
+    try world.add(sphere.Sphere{ .center = vec3.Vec3{ .y = 1 }, .radius = 1.0, .mat = material1 });
+    const material2 = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{ .x = 0.4, .y = 0.2, .z = 0.1 }) };
+    try world.add(sphere.Sphere{ .center = vec3.Vec3{ .x = -4, .y = 1 }, .radius = 1.0, .mat = material2 });
+    const material3 = material.Material{ .metal = material.Metal.fromColor(vec3.Vec3{ .x = 0.7, .y = 0.6, .z = 0.5 }, 0.1) };
+    try world.add(sphere.Sphere{ .center = vec3.Vec3{ .x = 4, .y = 1 }, .radius = 1.0, .mat = material3 });
 
     //Render
 
@@ -50,17 +75,17 @@ pub fn main() !void {
 
     var cam = camera.Camera{};
     cam.aspect_ratio = 16.0 / 9.0;
-    cam.image_width = 400;
-    cam.samples_per_pixel = 100;
+    cam.image_width = 800;
+    cam.samples_per_pixel = 500;
     cam.max_depth = 50;
 
     cam.vfov = 20;
-    cam.lookfrom = vec3.Vec3{ .x = -2, .y = 2, .z = 1 };
-    cam.lookat = vec3.Vec3{ .z = -1 };
+    cam.lookfrom = vec3.Vec3{ .x = 13, .y = 2, .z = 3 };
+    cam.lookat = vec3.Vec3{};
     cam.vup = vec3.Vec3{ .y = 1 };
 
-    cam.defocus_angle = 10.0;
-    cam.focus_dist = 3.4;
+    cam.defocus_angle = 0.6;
+    cam.focus_dist = 10.0;
 
     try cam.render(stdout, world);
 

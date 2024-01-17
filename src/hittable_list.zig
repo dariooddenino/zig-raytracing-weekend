@@ -24,8 +24,8 @@ pub const HittableList = struct {
         self.objects.clearAndFree();
     }
 
-    pub fn add(self: *HittableList, object: *sphere.Sphere) !void {
-        try self.objects.append(object.*);
+    pub fn add(self: *HittableList, object: sphere.Sphere) !void {
+        try self.objects.append(object);
     }
 
     pub fn hit(self: HittableList, r: ray.Ray, ray_t: interval.Interval, rec: *hittable.HitRecord) bool {
