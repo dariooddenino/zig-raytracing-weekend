@@ -99,6 +99,16 @@ pub inline fn unitVector(v: Vec3) Vec3 {
     return div(v, v.length());
 }
 
+pub inline fn randomInUnitDisk() Vec3 {
+    var p = Vec3{};
+    while (true) {
+        p = Vec3{ .x = rtweekend.randomDoubleRange(-1, 1), .y = rtweekend.randomDoubleRange(-1, 1) };
+        if (p.lengthSquared() < 1)
+            break;
+    }
+    return p;
+}
+
 pub inline fn random() Vec3 {
     return Vec3{ .x = rtweekend.randomDouble(), .y = rtweekend.randomDouble(), .z = rtweekend.randomDouble() };
 }

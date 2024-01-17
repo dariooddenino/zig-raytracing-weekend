@@ -7,7 +7,7 @@ pub fn toFloat(v: u32) f32 {
     return @as(f32, @floatFromInt(v));
 }
 
-pub inline fn degrees_to_radians(degrees: f32) f32 {
+pub inline fn degreesToRadians(degrees: f32) f32 {
     return degrees * pi / 180.0;
 }
 
