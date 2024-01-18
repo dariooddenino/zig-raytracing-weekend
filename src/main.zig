@@ -25,10 +25,10 @@ pub fn main() !void {
     const ground = sphere.Sphere{ .center = vec3.Vec3{ .y = -1000, .z = -1 }, .radius = 1000, .mat = ground_material };
     try world.add(ground);
 
-    var a: f32 = -9;
-    while (a < 9) : (a += 1) {
-        var b: f32 = -9;
-        while (b < 9) : (b += 1) {
+    var a: f32 = -5;
+    while (a < 5) : (a += 1) {
+        var b: f32 = -5;
+        while (b < 5) : (b += 1) {
             const choose_mat = rtweekend.randomDouble();
             const center = vec3.Vec3{ .x = a + 0.9 * rtweekend.randomDouble(), .y = 0.2, .z = b + 0.9 * rtweekend.randomDouble() };
 
@@ -75,9 +75,9 @@ pub fn main() !void {
 
     var cam = camera.Camera{};
     cam.aspect_ratio = 16.0 / 9.0;
-    cam.image_width = 800;
-    cam.samples_per_pixel = 500;
-    cam.max_depth = 50;
+    cam.image_width = 400;
+    cam.samples_per_pixel = 80;
+    cam.max_depth = 30;
 
     cam.vfov = 20;
     cam.lookfrom = vec3.Vec3{ .x = 13, .y = 2, .z = 3 };
@@ -87,7 +87,7 @@ pub fn main() !void {
     cam.defocus_angle = 0.6;
     cam.focus_dist = 10.0;
 
-    try cam.render(stdout, world);
+    try cam.render(stdout, world, true);
 
     // try stdout.print("Run `zig build test` to run the tests.\n", .{});
 
