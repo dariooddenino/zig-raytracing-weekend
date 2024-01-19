@@ -24,7 +24,6 @@ pub const Lambertian = struct {
     }
 
     pub fn scatter(self: Lambertian, r_in: ray.Ray, rec: hittable.HitRecord, attenuation: *vec3.Vec3, scattered: *ray.Ray) bool {
-        _ = r_in;
         var scatter_direction = rec.normal + vec3.randomUnitVector();
 
         // Catch degenerate scatter direction
@@ -32,7 +31,7 @@ pub const Lambertian = struct {
             scatter_direction = rec.normal;
         }
 
-        scattered.* = ray.Ray{ .origin = rec.p, .direction = scatter_direction };
+        scattered.* = ray.Ray{ .origin = rec.p, .direction = scatter_direction, .time = r_in.time };
         attenuation.* = self.albedo;
         return true;
     }
@@ -48,7 +47,7 @@ pub const Metal = struct {
 
     pub fn scatter(self: Metal, r_in: ray.Ray, rec: hittable.HitRecord, attenuation: *vec3.Vec3, scattered: *ray.Ray) bool {
         const reflected = vec3.reflect(vec3.unitVector(r_in.direction), rec.normal);
-        scattered.* = ray.Ray{ .origin = rec.p, .direction = reflected + vec3.splat3(self.fuzz) * vec3.randomUnitVector() };
+        scattered.* = ray.Ray{ .origin = rec.p, .direction = reflected + vec3.splat3(self.fuzz) * vec3.randomUnitVector(), .time = r_in.time };
         attenuation.* = self.albedo;
         return vec3.dot(scattered.direction, rec.normal) > 0;
     }
@@ -73,7 +72,7 @@ pub const Dielectric = struct {
             direction = vec3.reflect(unit_direction, rec.normal);
         } else direction = vec3.refract(unit_direction, rec.normal, refraction_ratio);
 
-        scattered.* = ray.Ray{ .origin = rec.p, .direction = direction };
+        scattered.* = ray.Ray{ .origin = rec.p, .direction = direction, .time = r_in.time };
         return true;
     }
 };

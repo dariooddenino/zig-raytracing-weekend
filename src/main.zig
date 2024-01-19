@@ -27,8 +27,13 @@ const Task = camera.Task;
 
 const ObjectList = std.ArrayList(Hittable);
 
+// TODO How can I manipulate objects (i.e. move them?)
+// TODO How can I share materials between objects?
 // TODO Use Color where appropriate.
-// TODO matthisk doesn't pass a shared matrec but creates it and returns it form the hit function.
+// TODO optionally output to a path on quit
+// TODO load scene from file
+// TODO does it know when it's done?
+// TODO cleanup unused code
 
 const image_width: u32 = 400;
 const aspect_ratio = 16.0 / 9.0;
@@ -65,8 +70,8 @@ pub fn main() !void {
         .aspect_ratio = aspect_ratio,
         .image_width = image_width,
         .image_height = image_height,
-        .samples_per_pixel = 500,
-        .max_depth = 80,
+        .samples_per_pixel = 100,
+        .max_depth = 50,
         .vfov = 20,
         .lookfrom = Vec3{ 13, 2, 3 },
         .lookat = vec3.zero(),
@@ -113,7 +118,7 @@ fn generateWorld(objects: *ObjectList) !HittableList {
     var world = hittable_list.HittableList{ .objects = objects };
 
     const ground_material = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{ 0.5, 0.5, 0.5 }) };
-    const ground = sphere.Sphere{ .center = vec3.Vec3{ 0, -1000, -1 }, .radius = 1000, .mat = ground_material };
+    const ground = sphere.Sphere{ .center1 = vec3.Vec3{ 0, -1000, -1 }, .radius = 1000, .mat = ground_material };
     try world.add(ground);
 
     var a: f32 = -11;
@@ -131,29 +136,30 @@ fn generateWorld(objects: *ObjectList) !HittableList {
                     // diffuse
                     const albedo = vec3.random() * vec3.random();
                     const sphere_material = material.Material{ .lambertian = material.Lambertian.fromColor(albedo) };
-                    const spherei = sphere.Sphere{ .center = center, .radius = 0.2, .mat = sphere_material };
+                    const center2 = center + Vec3{ 0, rtweekend.randomDoubleRange(0, 0.5), 0 };
+                    const spherei = sphere.Sphere.initMoving(center, center2, 0.2, sphere_material);
                     try world.add(spherei);
                 } else if (choose_mat < 0.95) {
                     // metal
                     const albedo = vec3.randomRange(0.5, 1);
                     const fuzz = rtweekend.randomDoubleRange(0, 0.5);
                     const sphere_material = material.Material{ .metal = material.Metal.fromColor(albedo, fuzz) };
-                    try world.add(sphere.Sphere{ .center = center, .radius = 0.2, .mat = sphere_material });
+                    try world.add(sphere.Sphere{ .center1 = center, .radius = 0.2, .mat = sphere_material });
                 } else {
                     // glass
                     const sphere_material = material.Material{ .dielectric = material.Dielectric{ .ir = 1.5 } };
-                    try world.add(sphere.Sphere{ .center = center, .radius = 0.2, .mat = sphere_material });
+                    try world.add(sphere.Sphere{ .center1 = center, .radius = 0.2, .mat = sphere_material });
                 }
             }
         }
     }
 
     const material1 = material.Material{ .dielectric = material.Dielectric{ .ir = 1.5 } };
-    try world.add(sphere.Sphere{ .center = Vec3{ 0, 1, 0 }, .radius = 1.0, .mat = material1 });
+    try world.add(sphere.Sphere{ .center1 = Vec3{ 0, 1, 0 }, .radius = 1.0, .mat = material1 });
     const material2 = material.Material{ .lambertian = material.Lambertian.fromColor(Vec3{ 0.4, 0.2, 0.1 }) };
-    try world.add(sphere.Sphere{ .center = Vec3{ -4, 1, 0 }, .radius = 1.0, .mat = material2 });
+    try world.add(sphere.Sphere{ .center1 = Vec3{ -4, 1, 0 }, .radius = 1.0, .mat = material2 });
     const material3 = material.Material{ .metal = material.Metal.fromColor(Vec3{ 0.7, 0.6, 0.5 }, 0.1) };
-    try world.add(sphere.Sphere{ .center = Vec3{ 4, 1, 0 }, .radius = 1.0, .mat = material3 });
+    try world.add(sphere.Sphere{ .center1 = Vec3{ 4, 1, 0 }, .radius = 1.0, .mat = material3 });
 
     return world;
 }

@@ -5,13 +5,30 @@ const hittable = @import("hittable.zig");
 const interval = @import("interval.zig");
 const material = @import("material.zig");
 
+const Vec3 = vec3.Vec3;
+const Material = material.Material;
+
 pub const Sphere = struct {
-    center: vec3.Vec3,
+    center1: Vec3,
     radius: f32,
-    mat: material.Material, // NOTE this was a pointer
+    mat: Material, // NOTE this was a pointer
+    is_moving: bool = false,
+    center_vec: Vec3 = vec3.zero(),
+
+    // TODO I don't like the fact that the init or moving ones is so different
+    pub fn initMoving(center1: Vec3, center2: Vec3, radius: f32, mat: Material) Sphere {
+        return Sphere{ .center1 = center1, .radius = radius, .mat = mat, .center_vec = center2 - center1, .is_moving = true };
+    }
+
+    pub fn getCenter(self: Sphere, time: f32) Vec3 {
+        // Linearly interpolate from center1 to center2 according to time, where t=0 yields center1, and t=1
+        // yields center2.
+        return self.center1 + vec3.splat3(time) * self.center_vec;
+    }
 
     pub fn hit(self: Sphere, r: ray.Ray, ray_t: interval.Interval, rec: *hittable.HitRecord) bool {
-        const oc = r.origin - self.center;
+        const center = if (self.is_moving) self.getCenter(r.time) else self.center1;
+        const oc = r.origin - center;
 
         const a = vec3.lengthSquared(r.direction);
         const half_b = vec3.dot(oc, r.direction);
@@ -30,7 +47,7 @@ pub const Sphere = struct {
 
         rec.t = root;
         rec.p = r.at(rec.t);
-        const outward_normal = (rec.p - self.center) / vec3.splat3(self.radius);
+        const outward_normal = (rec.p - center) / vec3.splat3(self.radius);
         // const outward_normal = vec3.div(vec3.sub(rec.p, self.center), self.radius);
         rec.setFaceNormal(r, outward_normal);
         rec.mat = self.mat;

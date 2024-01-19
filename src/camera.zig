@@ -189,8 +189,9 @@ pub const Camera = struct {
 
         const ray_origin = if (self.defocus_angle < 0) self.center else self.defocusDiskSample();
         const ray_direction = pixel_sample - ray_origin;
+        const ray_time = rtweekend.randomDouble();
 
-        return ray.Ray{ .origin = ray_origin, .direction = ray_direction };
+        return ray.Ray{ .origin = ray_origin, .direction = ray_direction, .time = ray_time };
     }
 
     fn rayColor(self: Camera, r: ray.Ray, depth: u8, world: anytype) vec3.Vec3 {
