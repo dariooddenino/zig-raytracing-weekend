@@ -24,7 +24,7 @@ pub const Sphere = struct {
     }
 
     pub fn initMoving(center1: Vec3, center2: Vec3, radius: f32, mat: Material) Sphere {
-        const rvec = Vec3(radius, radius, radius);
+        const rvec = Vec3{ radius, radius, radius };
         const box1 = Aabb.fromPoints(center1 - rvec, center1 + rvec);
         const box2 = Aabb.fromPoints(center2 - rvec, center2 + rvec);
         return Sphere{ .center1 = center1, .radius = radius, .mat = mat, .center_vec = center2 - center1, .is_moving = true, .bounding_box = Aabb.fromBoxes(box1, box2) };

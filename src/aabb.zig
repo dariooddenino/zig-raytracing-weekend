@@ -8,9 +8,9 @@ const Vec3 = vec3.Vec3;
 const Ray = ray.Ray;
 
 pub const Aabb = struct {
-    x: Interval = Interval{ .min = 0, .max = 0 },
-    y: Interval = Interval{ .min = 0, .max = 0 },
-    z: Interval = Interval{ .min = 0, .max = 0 },
+    x: Interval = Interval{},
+    y: Interval = Interval{},
+    z: Interval = Interval{},
 
     pub fn fromPoints(a: Vec3, b: Vec3) Aabb {
         // Treat the two points a and b as extrema for the bounding box, so we don't require a
@@ -23,10 +23,9 @@ pub const Aabb = struct {
     }
 
     pub fn fromBoxes(box0: Aabb, box1: Aabb) Aabb {
-        // TODO I think I'm missing a method here.
-        const x = Interval{ .min = box0.x, .max = box1.x };
-        const y = Interval{ .min = box0.y, .max = box1.y };
-        const z = Interval{ .min = box0.z, .max = box1.z };
+        const x = interval.fromIntervals(box0.x, box1.x);
+        const y = interval.fromIntervals(box0.y, box1.y);
+        const z = interval.fromIntervals(box0.z, box1.z);
 
         return Aabb{ .x = x, .y = y, .z = z };
     }
