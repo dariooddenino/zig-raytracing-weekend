@@ -4,8 +4,8 @@ const ray = @import("ray.zig");
 const material = @import("material.zig");
 
 pub const HitRecord = struct {
-    p: vec3.Vec3 = vec3.Vec3{},
-    normal: vec3.Vec3 = vec3.Vec3{},
+    p: vec3.Vec3 = vec3.zero(),
+    normal: vec3.Vec3 = vec3.zero(),
     mat: material.Material = undefined, // NOTE was a pointer
     t: f32 = 0,
     front_face: bool = false,
@@ -15,6 +15,6 @@ pub const HitRecord = struct {
         // NOTE: the parameter 'outward_normal' is assumed to have unit length.
 
         self.front_face = vec3.dot(r.direction, outward_normal) < 0;
-        self.normal = if (self.front_face) outward_normal else vec3.mul(-1.0, outward_normal);
+        self.normal = if (self.front_face) outward_normal else -outward_normal;
     }
 };

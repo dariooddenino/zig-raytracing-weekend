@@ -10,8 +10,6 @@ const material = @import("material.zig");
 
 const toFloat = rtweekend.toFloat;
 
-const allocator = std.heap.page_allocator;
-
 pub const Camera = struct {
     aspect_ratio: f32 = 1.0,
     image_width: u32 = 100,
@@ -24,25 +22,24 @@ pub const Camera = struct {
     samples_per_pixel: u16 = 10,
     max_depth: u8 = 10,
     vfov: f32 = 90,
-    lookfrom: vec3.Vec3 = vec3.Vec3{ .z = -1 },
-    lookat: vec3.Vec3 = vec3.Vec3{},
-    vup: vec3.Vec3 = vec3.Vec3{ .y = 1 },
-    u: vec3.Vec3 = vec3.Vec3{},
-    v: vec3.Vec3 = vec3.Vec3{},
-    w: vec3.Vec3 = vec3.Vec3{},
+    lookfrom: vec3.Vec3 = vec3.Vec3{ 0, 0, -1 },
+    lookat: vec3.Vec3 = vec3.zero(),
+    vup: vec3.Vec3 = vec3.Vec3{ 0, 1, 0 },
+    u: vec3.Vec3 = vec3.zero(),
+    v: vec3.Vec3 = vec3.zero(),
+    w: vec3.Vec3 = vec3.zero(),
     defocus_angle: f32 = 0,
     focus_dist: f32 = 10,
-    defocus_disk_u: vec3.Vec3 = vec3.Vec3{},
-    defocus_disk_v: vec3.Vec3 = vec3.Vec3{},
+    defocus_disk_u: vec3.Vec3 = vec3.zero(),
+    defocus_disk_v: vec3.Vec3 = vec3.zero(),
 
-    // TODO I need to be sure that this is using different random seeds.
-    // TODO wtf is using so much memory?
-    // TODO 1. check if results are different
-    // TODO 2. check the size of results (length and memory)
-    // TODO 3. make the average thing work (maybe test it on something simpler).
     pub fn render(self: *Camera, stdout: anytype, world: hittable_list.HittableList, multi_thread: bool) !void {
         self.initialize();
         try stdout.print("P3\n{d} {d}\n255\n", .{ self.image_width, self.image_height });
+        // TODO Maybe this should be a general purpose allocator?
+        var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+        const allocator = gpa.allocator();
+        defer _ = gpa.deinit();
 
         if (multi_thread) {
             const threads_num = 8;
@@ -62,19 +59,7 @@ pub const Camera = struct {
 
                 try final_image.appendSlice(results[t].items);
 
-                // for (0..self.size) |i| {
-                //     _ = i;
-                //     if (t == 0) {
-                //         final_image = try results[t].clone();
-                //     } else {
-                //         std.debug.print("{}\n", .{results[t].items[0]});
-                //         std.debug.print("{}\n", .{final_image.items[0]});
-                //         // const average = vec3.mul(vec3.add(final_image.items[i], results[t].items[i]), 0.5);
-                //         // try final_image.insert(i, average);
-                //     }
-                // }
                 results[t].clearAndFree();
-                // final_image.clearAndFree();
             }
 
             for (final_image.items) |pixel_color| {
@@ -90,11 +75,11 @@ pub const Camera = struct {
                 std.debug.print("\rScanlines remaining: {d}", .{self.image_height - j});
 
                 while (i < self.image_width) : (i += 1) {
-                    var pixel_color = vec3.Vec3{};
+                    var pixel_color = vec3.zero();
                     var k: u16 = 0;
                     while (k < self.samples_per_pixel) : (k += 1) {
                         const r = self.getRay(i, j);
-                        pixel_color = vec3.add(pixel_color, rayColor(r, self.max_depth, world));
+                        pixel_color = pixel_color + rayColor(r, self.max_depth, world);
                     }
 
                     try color.writeColor(stdout, pixel_color, self.samples_per_pixel);
@@ -117,49 +102,55 @@ pub const Camera = struct {
         const viewport_width: f32 = viewport_height * (toFloat(self.image_width) / toFloat(self.image_height));
 
         // Calculate the u,v,w unit basis vectors for the camera coordinate frame.
-        self.w = vec3.unitVector(vec3.sub(self.lookfrom, self.lookat));
+        self.w = vec3.unitVector(self.lookfrom - self.lookat);
         self.u = vec3.unitVector(vec3.cross(self.vup, self.w));
         self.v = vec3.cross(self.w, self.u);
 
         // Calculate the vectors across the horizontal and down the vertical viewport edges.
-        const viewport_u = vec3.mul(viewport_width, self.u);
-        const viewport_v = vec3.mul(viewport_height, vec3.mul(-1.0, self.v));
+        const viewport_u = vec3.splat3(viewport_width) * self.u;
+        const viewport_v = vec3.splat3(viewport_height) * -self.v;
 
         // Calculate the horizontal and vertical delta vectors from pixel to pixel.
-        self.pixel_delta_u = vec3.div(viewport_u, toFloat(self.image_width));
-        self.pixel_delta_v = vec3.div(viewport_v, toFloat(self.image_height));
+        self.pixel_delta_u = viewport_u / vec3.splat3(toFloat(self.image_width));
+        self.pixel_delta_v = viewport_v / vec3.splat3(toFloat(self.image_height));
 
         // Calculate the location of the upper left pixel.
-        const viewport_upper_left = vec3.sub(self.center, vec3.add(vec3.mul(self.focus_dist, self.w), vec3.add(vec3.div(viewport_u, 2.0), vec3.div(viewport_v, 2.0))));
+        // const viewport_upper_left = vec3.sub(self.center, vec3.add(vec3.mul(self.focus_dist, self.w), vec3.add(vec3.div(viewport_u, 2.0), vec3.div(viewport_v, 2.0))));
+        const viewport_upper_left = self.center - vec3.splat3(self.focus_dist) * self.w - viewport_u / vec3.splat3(2.0) - viewport_v / vec3.splat3(2.0);
 
-        self.pixel00_loc = vec3.add(viewport_upper_left, vec3.mul(0.5, vec3.add(self.pixel_delta_u, self.pixel_delta_v)));
+        // self.pixel00_loc = vec3.add(viewport_upper_left, vec3.mul(0.5, vec3.add(self.pixel_delta_u, self.pixel_delta_v)));
+        self.pixel00_loc = viewport_upper_left + vec3.splat3(0.5) * (self.pixel_delta_u + self.pixel_delta_v);
 
         // Calculate the camera defocus disk basis vector.
         const defocus_radius = self.focus_dist * @tan(rtweekend.degreesToRadians(self.defocus_angle / 2.0));
-        self.defocus_disk_u = vec3.mul(self.u, defocus_radius);
-        self.defocus_disk_v = vec3.mul(self.v, defocus_radius);
+        self.defocus_disk_u = self.u * vec3.splat3(defocus_radius);
+        self.defocus_disk_v = self.v * vec3.splat3(defocus_radius);
     }
 
     fn defocusDiskSample(self: Camera) vec3.Vec3 {
         // Returns a random point in the camera defocus disk.
         const p = vec3.randomInUnitDisk();
-        return vec3.add(self.center, vec3.add(vec3.mul(self.defocus_disk_u, p.x), vec3.mul(self.defocus_disk_v, p.y)));
+        return self.center + self.defocus_disk_u * vec3.splat3(p[0]) + self.defocus_disk_v * vec3.splat3(p[1]);
     }
 
     fn pixelSampleSquare(self: Camera) vec3.Vec3 {
         // Returns a random point in the square surrounding a pixel at the origin.
         const px = -0.5 + rtweekend.randomDouble();
         const py = -0.5 + rtweekend.randomDouble();
-        return (vec3.add(vec3.mul(px, self.pixel_delta_u), vec3.mul(py, self.pixel_delta_v)));
+        return vec3.splat3(px) * self.pixel_delta_u + vec3.splat3(py) * self.pixel_delta_v;
+        // return (vec3.add(vec3.mul(px, self.pixel_delta_u), vec3.mul(py, self.pixel_delta_v)));
     }
 
     fn getRay(self: Camera, i: u16, j: u16) ray.Ray {
         // Get a randomly sampled camera ray for the pixel at location i,j, originating from the camera defocus disk.
-        const pixel_center = vec3.add(self.pixel00_loc, vec3.add(vec3.mul(toFloat(i), self.pixel_delta_u), vec3.mul(toFloat(j), self.pixel_delta_v)));
-        const pixel_sample = vec3.add(pixel_center, self.pixelSampleSquare());
+        // const pixel_center = vec3.add(self.pixel00_loc, vec3.add(vec3.mul(toFloat(i), self.pixel_delta_u), vec3.mul(toFloat(j), self.pixel_delta_v)));
+        // const pixel_sample = vec3.add(pixel_center, self.pixelSampleSquare());
+
+        const pixel_center = self.pixel00_loc + self.pixel_delta_u * vec3.splat3(toFloat(i)) + self.pixel_delta_v * vec3.splat3(toFloat(j));
+        const pixel_sample = pixel_center + self.pixelSampleSquare();
 
         const ray_origin = if (self.defocus_angle < 0) self.center else self.defocusDiskSample();
-        const ray_direction = vec3.sub(pixel_sample, ray_origin);
+        const ray_direction = pixel_sample - ray_origin;
 
         return ray.Ray{ .origin = ray_origin, .direction = ray_direction };
     }
@@ -178,11 +169,11 @@ fn renderThread(world: hittable_list.HittableList, self: Camera, lines_per_threa
         // std.debug.print("\rScanlines remaining: {d}", .{self.image_height - j});
 
         while (i < self.image_width) : (i += 1) {
-            var pixel_color = vec3.Vec3{};
+            var pixel_color = vec3.zero();
             var k: u16 = 0;
             while (k < self.samples_per_pixel) : (k += 1) {
                 const r = getRay(self, i, @intCast(j));
-                pixel_color = vec3.add(pixel_color, rayColor(r, self.max_depth, world));
+                pixel_color = pixel_color + rayColor(r, self.max_depth, world);
             }
             try result.append(pixel_color);
         }
@@ -191,11 +182,12 @@ fn renderThread(world: hittable_list.HittableList, self: Camera, lines_per_threa
 
 fn getRay(self: Camera, i: u16, j: u16) ray.Ray {
     // Get a randomly sampled camera ray for the pixel at location i,j, originating from the camera defocus disk.
-    const pixel_center = vec3.add(self.pixel00_loc, vec3.add(vec3.mul(toFloat(i), self.pixel_delta_u), vec3.mul(toFloat(j), self.pixel_delta_v)));
-    const pixel_sample = vec3.add(pixel_center, self.pixelSampleSquare());
+    // const pixel_center = vec3.add(self.pixel00_loc, vec3.add(vec3.mul(toFloat(i), self.pixel_delta_u), vec3.mul(toFloat(j), self.pixel_delta_v)));
+    const pixel_center = self.pixel00_loc + self.pixel_delta_u * vec3.splat3(toFloat(i)) + self.pixel_delta_v * vec3.splat3(toFloat(j));
+    const pixel_sample = pixel_center + self.pixelSampleSquare();
 
     const ray_origin = if (self.defocus_angle < 0) self.center else self.defocusDiskSample();
-    const ray_direction = vec3.sub(pixel_sample, ray_origin);
+    const ray_direction = pixel_sample - ray_origin;
 
     return ray.Ray{ .origin = ray_origin, .direction = ray_direction };
 }
@@ -204,20 +196,21 @@ fn rayColor(r: ray.Ray, depth: u8, world: anytype) vec3.Vec3 {
     var rec = hittable.HitRecord{};
 
     if (depth <= 0) {
-        return vec3.Vec3{};
+        return vec3.zero();
     }
 
     if (world.hit(r, interval.Interval{ .min = 0.001 }, &rec)) {
         var scattered = ray.Ray{};
-        var attenuation = vec3.Vec3{};
+        var attenuation = vec3.zero();
         const mat = rec.mat;
         if (mat.scatter(r, rec, &attenuation, &scattered))
-            return vec3.mul(attenuation, rayColor(scattered, depth - 1, world));
+            return attenuation * rayColor(scattered, depth - 1, world);
 
-        return vec3.Vec3{};
+        return vec3.zero();
     }
 
     const unit_direction = vec3.unitVector(r.direction);
-    const a: f32 = 0.5 * (unit_direction.y + 1.0);
-    return vec3.add(vec3.mul(1.0 - a, vec3.Vec3{ .x = 1, .y = 1, .z = 1 }), vec3.mul(a, vec3.Vec3{ .x = 0.5, .y = 0.7, .z = 1.0 }));
+    const a: f32 = 0.5 * (unit_direction[1] + 1.0);
+    return vec3.Vec3{ 1, 1, 1 } * vec3.splat3(1.0 - a) + vec3.Vec3{ 0.5, 0.7, 1.0 } * vec3.splat3(a);
+    // return vec3.add(vec3.mul(1.0 - a, vec3.Vec3{ 1, 1, 1 }), vec3.mul(a, vec3.Vec3{ 0.5, 0.7, 1.0 }));
 }

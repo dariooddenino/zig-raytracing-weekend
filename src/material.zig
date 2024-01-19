@@ -25,10 +25,10 @@ pub const Lambertian = struct {
 
     pub fn scatter(self: Lambertian, r_in: ray.Ray, rec: hittable.HitRecord, attenuation: *vec3.Vec3, scattered: *ray.Ray) bool {
         _ = r_in;
-        var scatter_direction = vec3.add(rec.normal, vec3.randomUnitVector());
+        var scatter_direction = rec.normal + vec3.randomUnitVector();
 
         // Catch degenerate scatter direction
-        if (scatter_direction.nearZero()) {
+        if (vec3.nearZero(scatter_direction)) {
             scatter_direction = rec.normal;
         }
 
@@ -48,7 +48,7 @@ pub const Metal = struct {
 
     pub fn scatter(self: Metal, r_in: ray.Ray, rec: hittable.HitRecord, attenuation: *vec3.Vec3, scattered: *ray.Ray) bool {
         const reflected = vec3.reflect(vec3.unitVector(r_in.direction), rec.normal);
-        scattered.* = ray.Ray{ .origin = rec.p, .direction = vec3.add(reflected, vec3.mul(self.fuzz, vec3.randomUnitVector())) };
+        scattered.* = ray.Ray{ .origin = rec.p, .direction = reflected + vec3.splat3(self.fuzz) * vec3.randomUnitVector() };
         attenuation.* = self.albedo;
         return vec3.dot(scattered.direction, rec.normal) > 0;
     }
@@ -58,16 +58,16 @@ pub const Dielectric = struct {
     ir: f32 = 1,
 
     pub fn scatter(self: Dielectric, r_in: ray.Ray, rec: hittable.HitRecord, attenuation: *vec3.Vec3, scattered: *ray.Ray) bool {
-        attenuation.* = vec3.Vec3{ .x = 1, .y = 1, .z = 1 };
+        attenuation.* = vec3.Vec3{ 1, 1, 1 };
         const refraction_ratio = if (rec.front_face) (1.0 / self.ir) else self.ir;
 
         const unit_direction = vec3.unitVector(r_in.direction);
 
-        const cos_theta = @min(vec3.dot(vec3.mul(-1.0, unit_direction), rec.normal), 1.0);
+        const cos_theta = @min(vec3.dot(-unit_direction, rec.normal), 1.0);
         const sin_theta = @sqrt(1.0 - cos_theta * cos_theta);
 
         const cannot_refract = refraction_ratio * sin_theta > 1.0;
-        var direction = vec3.Vec3{};
+        var direction = vec3.zero();
 
         if (cannot_refract or reflectance(cos_theta, refraction_ratio) > rtweekend.randomDouble()) {
             direction = vec3.reflect(unit_direction, rec.normal);

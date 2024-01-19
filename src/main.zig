@@ -10,6 +10,8 @@ const interval = @import("interval.zig");
 const camera = @import("camera.zig");
 const material = @import("material.zig");
 
+// TODO Use Color where appropriate.
+
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
@@ -21,8 +23,8 @@ pub fn main() !void {
     // World
     var world = hittable_list.HittableList{ .objects = std.ArrayList(sphere.Sphere).init(allocator) };
 
-    const ground_material = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{ .x = 0.5, .y = 0.5, .z = 0.5 }) };
-    const ground = sphere.Sphere{ .center = vec3.Vec3{ .y = -1000, .z = -1 }, .radius = 1000, .mat = ground_material };
+    const ground_material = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{ 0.5, 0.5, 0.5 }) };
+    const ground = sphere.Sphere{ .center = vec3.Vec3{ 0, -1000, -1 }, .radius = 1000, .mat = ground_material };
     try world.add(ground);
 
     var a: f32 = -5;
@@ -30,15 +32,15 @@ pub fn main() !void {
         var b: f32 = -5;
         while (b < 5) : (b += 1) {
             const choose_mat = rtweekend.randomDouble();
-            const center = vec3.Vec3{ .x = a + 0.9 * rtweekend.randomDouble(), .y = 0.2, .z = b + 0.9 * rtweekend.randomDouble() };
+            const center = vec3.Vec3{ a + 0.9 * rtweekend.randomDouble(), 0.2, b + 0.9 * rtweekend.randomDouble() };
 
-            if ((vec3.sub(center, vec3.Vec3{ .x = 4, .y = 0.2 })).length() > 0.9) {
+            if (vec3.length(center - vec3.Vec3{ 4, 0.2, 0 }) > 0.9) {
                 // TODO: this was a shared_ptr, not entirely sure why and how to replicate.
                 // var sphere_material = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{}) };
 
                 if (choose_mat < 0.8) {
                     // diffuse
-                    const albedo = vec3.mul(vec3.random(), vec3.random());
+                    const albedo = vec3.random() * vec3.random();
                     const sphere_material = material.Material{ .lambertian = material.Lambertian.fromColor(albedo) };
                     const spherei = sphere.Sphere{ .center = center, .radius = 0.2, .mat = sphere_material };
                     try world.add(spherei);
@@ -58,11 +60,11 @@ pub fn main() !void {
     }
 
     const material1 = material.Material{ .dielectric = material.Dielectric{ .ir = 1.5 } };
-    try world.add(sphere.Sphere{ .center = vec3.Vec3{ .y = 1 }, .radius = 1.0, .mat = material1 });
-    const material2 = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{ .x = 0.4, .y = 0.2, .z = 0.1 }) };
-    try world.add(sphere.Sphere{ .center = vec3.Vec3{ .x = -4, .y = 1 }, .radius = 1.0, .mat = material2 });
-    const material3 = material.Material{ .metal = material.Metal.fromColor(vec3.Vec3{ .x = 0.7, .y = 0.6, .z = 0.5 }, 0.1) };
-    try world.add(sphere.Sphere{ .center = vec3.Vec3{ .x = 4, .y = 1 }, .radius = 1.0, .mat = material3 });
+    try world.add(sphere.Sphere{ .center = vec3.Vec3{ 0, 1, 0 }, .radius = 1.0, .mat = material1 });
+    const material2 = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{ 0.4, 0.2, 0.1 }) };
+    try world.add(sphere.Sphere{ .center = vec3.Vec3{ -4, 1, 0 }, .radius = 1.0, .mat = material2 });
+    const material3 = material.Material{ .metal = material.Metal.fromColor(vec3.Vec3{ 0.7, 0.6, 0.5 }, 0.1) };
+    try world.add(sphere.Sphere{ .center = vec3.Vec3{ 4, 1, 0 }, .radius = 1.0, .mat = material3 });
 
     //Render
 
@@ -76,13 +78,13 @@ pub fn main() !void {
     var cam = camera.Camera{};
     cam.aspect_ratio = 16.0 / 9.0;
     cam.image_width = 400;
-    cam.samples_per_pixel = 80;
-    cam.max_depth = 30;
+    cam.samples_per_pixel = 30;
+    cam.max_depth = 20;
 
     cam.vfov = 20;
-    cam.lookfrom = vec3.Vec3{ .x = 13, .y = 2, .z = 3 };
-    cam.lookat = vec3.Vec3{};
-    cam.vup = vec3.Vec3{ .y = 1 };
+    cam.lookfrom = vec3.Vec3{ 13, 2, 3 };
+    cam.lookat = vec3.zero();
+    cam.vup = vec3.Vec3{ 0, 1, 0 };
 
     cam.defocus_angle = 0.6;
     cam.focus_dist = 10.0;

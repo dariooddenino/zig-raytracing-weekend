@@ -3,14 +3,16 @@ const vec3 = @import("vec3.zig");
 const interval = @import("interval.zig");
 const rtweekend = @import("rtweekend.zig");
 
+pub const Color = vec3.Vec3;
+
 fn linearToGamma(linear_component: f32) f32 {
     return @sqrt(linear_component);
 }
 
-pub fn writeColor(stdout: anytype, pixel_color: vec3.Vec3, samples_per_pixel: u16) !void {
-    var r = pixel_color.x;
-    var g = pixel_color.y;
-    var b = pixel_color.z;
+pub fn writeColor(stdout: anytype, pixel_color: Color, samples_per_pixel: u16) !void {
+    var r = pixel_color[0];
+    var g = pixel_color[1];
+    var b = pixel_color[2];
 
     // Divide the color by the number of samples.
     const scale: f32 = 1.0 / rtweekend.toFloat(samples_per_pixel);
