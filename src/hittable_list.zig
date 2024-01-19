@@ -4,6 +4,9 @@ const hittable = @import("hittable.zig");
 const ray = @import("ray.zig");
 const interval = @import("interval.zig");
 const sphere = @import("sphere.zig");
+const aabb = @import("aabb.zig");
+
+const Aabb = aabb.Aabb;
 
 pub const Hittable = union(enum) {
     sphere: sphere.Sphere,
@@ -13,18 +16,31 @@ pub const Hittable = union(enum) {
             inline else => |object| return object.hit(r, ray_t, rec),
         }
     }
+
+    // pub fn boundingBox(self: Hittable) Aabb {
+    //     switch (self) {
+    //         inline else => |object| return object.boundingBox(),
+    //     }
+    // }
 };
 
 // pub fn hittableList(comptime val_type: type) type {
 // return struct {
 pub const HittableList = struct {
     objects: *std.ArrayList(Hittable),
+    bounding_box: Aabb = Aabb{},
 
     pub inline fn add(self: *HittableList, object: anytype) !void {
         if (@TypeOf(object) == Hittable) {
             try self.objects.append(object);
+            switch (object) {
+                .sphere => |sph| {
+                    self.bounding_box = Aabb.fromBoxes(self.bounding_box, sph.bounding_box);
+                },
+            }
         } else if (@TypeOf(object) == sphere.Sphere) {
             try self.objects.append(Hittable{ .sphere = object });
+            self.bounding_box = Aabb.fromBoxes(self.bounding_box, object.bounding_box);
         } else unreachable;
     }
 

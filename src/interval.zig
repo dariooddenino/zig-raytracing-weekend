@@ -18,6 +18,15 @@ pub const Interval = struct {
         if (x > self.max) return self.max;
         return x;
     }
+
+    pub fn size(self: Interval) f32 {
+        return self.max - self.min;
+    }
+
+    pub fn expand(self: Interval, delta: f32) Interval {
+        const padding = delta / 2.0;
+        return Interval{ .min = self.min - padding, .max = self.max + padding };
+    }
 };
 
 pub const empty = Interval{ .min = rtweekend.infinity, .max = -rtweekend.infinity };
