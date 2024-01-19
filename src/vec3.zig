@@ -2,6 +2,7 @@ const std = @import("std");
 const rtweekend = @import("rtweekend.zig");
 
 pub const Vec3 = @Vector(3, f32);
+pub const Vec4 = @Vector(4, f32);
 
 pub inline fn zero() Vec3 {
     return Vec3{ 0, 0, 0 };

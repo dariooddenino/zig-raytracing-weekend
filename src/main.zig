@@ -9,32 +9,121 @@ const sphere = @import("sphere.zig");
 const interval = @import("interval.zig");
 const camera = @import("camera.zig");
 const material = @import("material.zig");
+const c = @cImport({
+    @cInclude("SDL2/SDL.h");
+});
+const window = @import("window.zig");
+
+const toFloat = rtweekend.toFloat;
+
+const Vec3 = vec3.Vec3;
+const Ray = ray.Ray;
+const ColorAndSamples = color.ColorAndSamples;
+const Hittable = hittable_list.Hittable;
+const HittableList = hittable_list.HittableList;
+const Camera = camera.Camera;
+const SharedStateImageWriter = camera.SharedStateImageWriter;
+const Task = camera.Task;
+
+const ObjectList = std.ArrayList(Hittable);
 
 // TODO Use Color where appropriate.
+// TODO matthisk doesn't pass a shared matrec but creates it and returns it form the hit function.
+
+const image_width: u32 = 400;
+const aspect_ratio = 16.0 / 9.0;
+const image_height: u32 = @intFromFloat(@round(toFloat(image_width) / aspect_ratio));
+const number_of_threads = 8;
+
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var arena = std.heap.ArenaAllocator.init(gpa.allocator());
+var allocator = arena.allocator();
 
 pub fn main() !void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
-    const allocator = arena.allocator();
+    const image_buffer = try allocator.alloc([]ColorAndSamples, image_width);
 
-    // TODO: do we need to pass the objects as references? I'm not sure tbh.
-    // NOTE I've been removing almost all pointers because they were making my life harder and I don't know what
-    // the point of using them actually was.
-    // World
-    var world = hittable_list.HittableList{ .objects = std.ArrayList(sphere.Sphere).init(allocator) };
+    for (0..image_width) |x| {
+        image_buffer[x] = try allocator.alloc(ColorAndSamples, image_height);
+    }
+
+    for (0..image_width) |x| {
+        for (0..image_height) |y| {
+            image_buffer[x][y] = ColorAndSamples{ 0, 0, 0, 1 };
+        }
+    }
+
+    // Allocate heap.
+    var objects = ObjectList.init(allocator);
+    defer objects.deinit();
+
+    // Generate a random world.
+    const world = try generateWorld(&objects);
+
+    // Initialize camera and render frame.
+    var cam = Camera{
+        .aspect_ratio = aspect_ratio,
+        .image_width = image_width,
+        .image_height = image_height,
+        .samples_per_pixel = 500,
+        .max_depth = 80,
+        .vfov = 20,
+        .lookfrom = Vec3{ 13, 2, 3 },
+        .lookat = vec3.zero(),
+        .vup = Vec3{ 0, 1, 0 },
+        .defocus_angle = 0.6,
+        .focus_dist = 10.0,
+        .writer = SharedStateImageWriter.init(image_buffer),
+    };
+
+    var threads = std.ArrayList(std.Thread).init(allocator);
+
+    for (0..number_of_threads) |thread_idx| {
+        const task = Task{ .thread_idx = @intCast(thread_idx), .chunk_size = (image_width * image_height) / number_of_threads, .world = world, .camera = &cam };
+
+        const thread = try std.Thread.spawn(.{ .allocator = allocator }, renderFn, .{task});
+
+        try threads.append(thread);
+    }
+
+    try window.initialize(image_width, image_height, image_buffer);
+
+    for (threads.items) |thread| {
+        thread.join();
+    }
+
+    //// OLD CODE BELOW
+
+    // stdout is for the actual output of your application, for example if you
+    // are implementing gzip, then only the compressed bytes should be sent to
+    // stdout, not any debugging messages.
+    // const stdout_file = std.io.getStdOut().writer();
+    // var bw = std.io.bufferedWriter(stdout_file);
+    // const stdout = bw.writer();
+    // try cam.render(stdout, world, true);
+
+    // try bw.flush();
+}
+
+pub fn renderFn(context: Task) !void {
+    try context.camera.render(context);
+}
+
+fn generateWorld(objects: *ObjectList) !HittableList {
+    var world = hittable_list.HittableList{ .objects = objects };
 
     const ground_material = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{ 0.5, 0.5, 0.5 }) };
     const ground = sphere.Sphere{ .center = vec3.Vec3{ 0, -1000, -1 }, .radius = 1000, .mat = ground_material };
     try world.add(ground);
 
-    var a: f32 = -5;
-    while (a < 5) : (a += 1) {
-        var b: f32 = -5;
-        while (b < 5) : (b += 1) {
+    var a: f32 = -11;
+    while (a < 11) : (a += 1) {
+        var b: f32 = -11;
+        while (b < 11) : (b += 1) {
             const choose_mat = rtweekend.randomDouble();
-            const center = vec3.Vec3{ a + 0.9 * rtweekend.randomDouble(), 0.2, b + 0.9 * rtweekend.randomDouble() };
+            const center = Vec3{ a + 0.9 * rtweekend.randomDouble(), 0.2, b + 0.9 * rtweekend.randomDouble() };
 
-            if (vec3.length(center - vec3.Vec3{ 4, 0.2, 0 }) > 0.9) {
+            if (vec3.length(center - Vec3{ 4, 0.2, 0 }) > 0.9) {
                 // TODO: this was a shared_ptr, not entirely sure why and how to replicate.
                 // var sphere_material = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{}) };
 
@@ -60,45 +149,11 @@ pub fn main() !void {
     }
 
     const material1 = material.Material{ .dielectric = material.Dielectric{ .ir = 1.5 } };
-    try world.add(sphere.Sphere{ .center = vec3.Vec3{ 0, 1, 0 }, .radius = 1.0, .mat = material1 });
-    const material2 = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{ 0.4, 0.2, 0.1 }) };
-    try world.add(sphere.Sphere{ .center = vec3.Vec3{ -4, 1, 0 }, .radius = 1.0, .mat = material2 });
-    const material3 = material.Material{ .metal = material.Metal.fromColor(vec3.Vec3{ 0.7, 0.6, 0.5 }, 0.1) };
-    try world.add(sphere.Sphere{ .center = vec3.Vec3{ 4, 1, 0 }, .radius = 1.0, .mat = material3 });
+    try world.add(sphere.Sphere{ .center = Vec3{ 0, 1, 0 }, .radius = 1.0, .mat = material1 });
+    const material2 = material.Material{ .lambertian = material.Lambertian.fromColor(Vec3{ 0.4, 0.2, 0.1 }) };
+    try world.add(sphere.Sphere{ .center = Vec3{ -4, 1, 0 }, .radius = 1.0, .mat = material2 });
+    const material3 = material.Material{ .metal = material.Metal.fromColor(Vec3{ 0.7, 0.6, 0.5 }, 0.1) };
+    try world.add(sphere.Sphere{ .center = Vec3{ 4, 1, 0 }, .radius = 1.0, .mat = material3 });
 
-    //Render
-
-    // stdout is for the actual output of your application, for example if you
-    // are implementing gzip, then only the compressed bytes should be sent to
-    // stdout, not any debugging messages.
-    const stdout_file = std.io.getStdOut().writer();
-    var bw = std.io.bufferedWriter(stdout_file);
-    const stdout = bw.writer();
-
-    var cam = camera.Camera{};
-    cam.aspect_ratio = 16.0 / 9.0;
-    cam.image_width = 400;
-    cam.samples_per_pixel = 30;
-    cam.max_depth = 20;
-
-    cam.vfov = 20;
-    cam.lookfrom = vec3.Vec3{ 13, 2, 3 };
-    cam.lookat = vec3.zero();
-    cam.vup = vec3.Vec3{ 0, 1, 0 };
-
-    cam.defocus_angle = 0.6;
-    cam.focus_dist = 10.0;
-
-    try cam.render(stdout, world, true);
-
-    // try stdout.print("Run `zig build test` to run the tests.\n", .{});
-
-    try bw.flush();
+    return world;
 }
-
-// test "simple test" {
-//     var list = std.ArrayList(i32).init(std.testing.allocator);
-//     defer list.deinit(); // try commenting this out and see if zig detects the memory leak!
-//     try list.append(42);
-//     try std.testing.expectEqual(@as(i32, 42), list.pop());
-// }
