@@ -53,8 +53,6 @@ pub const Camera = struct {
     writer: SharedStateImageWriter = undefined,
 
     pub fn render(self: *Camera, context: Task) std.fs.File.Writer.Error!void {
-        try self.initialize();
-
         const start_at = context.thread_idx * context.chunk_size;
         const end_before = start_at + context.chunk_size;
 
@@ -71,7 +69,63 @@ pub const Camera = struct {
         }
     }
 
-    fn initialize(self: *Camera) !void {
+    // Old render
+    // pub fn render(self: *Camera, stdout: anytype, world: hittable_list.HittableList, multi_thread: bool) !void {
+    //     self.initialize();
+    //     try stdout.print("P3\n{d} {d}\n255\n", .{ self.image_width, self.image_height });
+    //     // TODO Maybe this should be a general purpose allocator?
+    //     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    //     const allocator = gpa.allocator();
+    //     defer _ = gpa.deinit();
+
+    //     if (multi_thread) {
+    //         const threads_num = 8;
+    //         const lines_per_thread: u16 = @as(u16, @intFromFloat(@ceil(@as(f32, @floatFromInt(self.image_height)) / @as(f32, @floatFromInt(threads_num)))));
+    //         var threads: [threads_num]std.Thread = undefined;
+    //         var results: [threads_num]std.ArrayList(vec3.Vec3) = undefined;
+
+    //         for (0..threads_num) |t| {
+    //             results[t] = std.ArrayList(vec3.Vec3).init(allocator);
+    //             threads[t] = try std.Thread.spawn(.{}, renderThread, .{ world, self.*, lines_per_thread, t, &results[t] });
+    //         }
+
+    //         var final_image: std.ArrayList(vec3.Vec3) = std.ArrayList(vec3.Vec3).init(allocator);
+
+    //         for (0..threads_num) |t| {
+    //             threads[t].join();
+
+    //             try final_image.appendSlice(results[t].items);
+
+    //             results[t].clearAndFree();
+    //         }
+
+    //         for (final_image.items) |pixel_color| {
+    //             try color.writeColor(stdout, pixel_color, self.samples_per_pixel);
+    //         }
+    //         final_image.clearAndFree();
+    //     } else {
+    //         var j: u16 = 0;
+
+    //         while (j < self.image_height) : (j += 1) {
+    //             var i: u16 = 0;
+    //             // TODO: I should flush here to avoid overwriting with Done?
+    //             std.debug.print("\rScanlines remaining: {d}", .{self.image_height - j});
+
+    //             while (i < self.image_width) : (i += 1) {
+    //                 var pixel_color = vec3.zero();
+    //                 var k: u16 = 0;
+    //                 while (k < self.samples_per_pixel) : (k += 1) {
+    //                     const r = self.getRay(i, j);
+    //                     pixel_color = pixel_color + rayColor(r, self.max_depth, world);
+    //                 }
+
+    //                 try color.writeColor(stdout, pixel_color, self.samples_per_pixel);
+    //             }
+    //         }
+    //     }
+    // }
+
+    pub fn initialize(self: *Camera) !void {
         if (self.image_height == undefined)
             self.image_height = @intFromFloat(@round(toFloat(self.image_width) / self.aspect_ratio));
         if (self.image_height < 1) self.image_height = 1;
