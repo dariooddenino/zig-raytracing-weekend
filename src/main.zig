@@ -28,6 +28,8 @@ const SharedStateImageWriter = camera.SharedStateImageWriter;
 const Task = camera.Task;
 const BVHTree = bvh.BVHTree;
 const BVHNode = bvh.BVHNode;
+const Sphere = sphere.Sphere;
+const Material = material.Material;
 
 const ObjectList = std.ArrayList(Hittable);
 
@@ -104,8 +106,6 @@ pub fn main() !void {
         thread.join();
     }
 
-    std.debug.print("DONE\n", .{});
-
     //// OLD CODE BELOW
 
     // stdout is for the actual output of your application, for example if you
@@ -123,12 +123,10 @@ pub fn renderFn(context: Task) !void {
     try context.camera.render(context);
 }
 
-fn generateWorld(objects: *ObjectList) !BVHTree {
-    var world = hittable_list.HittableList{ .objects = objects };
-
-    const ground_material = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{ 0.5, 0.5, 0.5 }) };
-    const ground = sphere.Sphere.init(vec3.Vec3{ 0, -1000, -1 }, 1000, ground_material);
-    try world.add(ground);
+fn generateWorld(objects: *ObjectList) !Hittable {
+    const ground_material = Material{ .lambertian = material.Lambertian.fromColor(Vec3{ 0.5, 0.5, 0.5 }) };
+    const ground = Sphere.init(vec3.Vec3{ 0, -1000, -1 }, 1000, ground_material);
+    try objects.append(ground);
 
     // TODO when I enable all these spheres (even if few) things go completely crazy.
     // TODO it looks like the big spheres are cut, i.e. their bounding boxes are ifnluenced by the small ones.
@@ -146,37 +144,37 @@ fn generateWorld(objects: *ObjectList) !BVHTree {
 
                 if (choose_mat < 0.8) {
                     // diffuse
-                    // const albedo = vec3.random() * vec3.random();
-                    // const sphere_material = material.Material{ .lambertian = material.Lambertian.fromColor(albedo) };
-                    // const center2 = center + Vec3{ 0, rtweekend.randomDoubleRange(0, 0.5), 0 };
-                    // const spherei = sphere.Sphere.initMoving(center, center2, 0.2, sphere_material);
-                    // try world.add(spherei);
+                    const albedo = vec3.random() * vec3.random();
+                    const sphere_material = material.Material{ .lambertian = material.Lambertian.fromColor(albedo) };
+                    const center2 = center + Vec3{ 0, rtweekend.randomDoubleRange(0, 0.5), 0 };
+                    const spherei = sphere.Sphere.initMoving(center, center2, 0.2, sphere_material);
+                    try objects.append(spherei);
                 } else if (choose_mat < 0.95) {
                     // metal
                     const albedo = vec3.randomRange(0.5, 1);
                     const fuzz = rtweekend.randomDoubleRange(0, 0.5);
                     const sphere_material = material.Material{ .metal = material.Metal.fromColor(albedo, fuzz) };
-                    try world.add(sphere.Sphere.init(center, 0.2, sphere_material));
+                    try objects.append(sphere.Sphere.init(center, 0.2, sphere_material));
                 } else {
                     // glass
-                    // const sphere_material = material.Material{ .dielectric = material.Dielectric{ .ir = 1.5 } };
-                    // try world.add(sphere.Sphere.init(center, 0.2, sphere_material));
+                    const sphere_material = material.Material{ .dielectric = material.Dielectric{ .ir = 1.5 } };
+                    try objects.append(sphere.Sphere.init(center, 0.2, sphere_material));
                 }
             }
         }
     }
 
-    const material1 = material.Material{ .dielectric = material.Dielectric{ .ir = 1.5 } };
-    try world.add(sphere.Sphere.init(Vec3{ 0, 1, 0 }, 1.0, material1));
+    const material1 = Material{ .dielectric = material.Dielectric{ .ir = 1.5 } };
+    try objects.append(Sphere.init(Vec3{ 0, 1, 0 }, 1.0, material1));
 
-    const material2 = material.Material{ .lambertian = material.Lambertian.fromColor(Vec3{ 0.4, 0.2, 0.1 }) };
-    try world.add(sphere.Sphere.init(Vec3{ -4, 1, 0 }, 1.0, material2));
+    const material2 = Material{ .lambertian = material.Lambertian.fromColor(Vec3{ 0.4, 0.2, 0.1 }) };
+    try objects.append(Sphere.init(Vec3{ -4, 1, 0 }, 1.0, material2));
 
-    const material3 = material.Material{ .metal = material.Metal.fromColor(Vec3{ 0.7, 0.6, 0.5 }, 0.1) };
-    try world.add(sphere.Sphere.init(Vec3{ 4, 1, 0 }, 1.0, material3));
+    const material3 = Material{ .metal = material.Metal.fromColor(Vec3{ 0.7, 0.6, 0.5 }, 0.1) };
+    try objects.append(Sphere.init(Vec3{ 4, 1, 0 }, 1.0, material3));
 
     // return try BvhNode.init(allocator, &world.objects);
     const tree = try BVHTree.init(allocator, objects.items, 0, objects.items.len);
 
-    return tree;
+    return Hittable{ .tree = tree };
 }

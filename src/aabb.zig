@@ -62,7 +62,10 @@ pub const Aabb = struct {
     //     return true;
     // }
 
-    pub fn hit(self: Aabb, r: Ray, ray_t: *Interval) bool {
+    pub fn hit(self: Aabb, r: Ray, ray_t: Interval) bool {
+        var ray_t_min = ray_t.min;
+        var ray_t_max = ray_t.max;
+
         for (0..3) |a| {
             const invD = 1 / r.direction[a];
             const orig = r.origin[a];
@@ -83,12 +86,12 @@ pub const Aabb = struct {
             // std.debug.print("T0 {d} T1 {d}\n", .{ t0, t1 });
             // std.debug.print("PRE ray_t {}\n", .{ray_t});
 
-            if (t0 > ray_t.min) ray_t.min = t0;
-            if (t1 < ray_t.max) ray_t.max = t1;
+            if (t0 > ray_t.min) ray_t_min = t0;
+            if (t1 < ray_t.max) ray_t_max = t1;
 
             // std.debug.print("POST ray_t {}\n", .{ray_t});
 
-            if (ray_t.max <= ray_t.min) return false;
+            if (ray_t_max <= ray_t_min) return false;
         }
         return true;
     }

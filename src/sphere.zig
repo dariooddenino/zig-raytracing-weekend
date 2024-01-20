@@ -5,10 +5,13 @@ const hittable = @import("hittable.zig");
 const interval = @import("interval.zig");
 const material = @import("material.zig");
 const aabb = @import("aabb.zig");
+const hittable_list = @import("hittable_list.zig");
 
 const Aabb = aabb.Aabb;
 const Vec3 = vec3.Vec3;
 const Material = material.Material;
+const Hittable = hittable_list.Hittable;
+const HitRecord = hittable.HitRecord;
 
 pub const Sphere = struct {
     center1: Vec3,
@@ -22,16 +25,16 @@ pub const Sphere = struct {
         return self.bounding_box;
     }
 
-    pub fn init(center1: Vec3, radius: f32, mat: Material) Sphere {
+    pub fn init(center1: Vec3, radius: f32, mat: Material) Hittable {
         const rvec = Vec3{ radius, radius, radius };
-        return Sphere{ .center1 = center1, .radius = radius, .mat = mat, .bounding_box = Aabb.fromPoints(center1 - rvec, center1 + rvec) };
+        return Hittable{ .sphere = Sphere{ .center1 = center1, .radius = radius, .mat = mat, .bounding_box = Aabb.fromPoints(center1 - rvec, center1 + rvec) } };
     }
 
-    pub fn initMoving(center1: Vec3, center2: Vec3, radius: f32, mat: Material) Sphere {
+    pub fn initMoving(center1: Vec3, center2: Vec3, radius: f32, mat: Material) Hittable {
         const rvec = Vec3{ radius, radius, radius };
         const box1 = Aabb.fromPoints(center1 - rvec, center1 + rvec);
         const box2 = Aabb.fromPoints(center2 - rvec, center2 + rvec);
-        return Sphere{ .center1 = center1, .radius = radius, .mat = mat, .center_vec = center2 - center1, .is_moving = true, .bounding_box = Aabb.fromBoxes(box1, box2) };
+        return Hittable{ .sphere = Sphere{ .center1 = center1, .radius = radius, .mat = mat, .center_vec = center2 - center1, .is_moving = true, .bounding_box = Aabb.fromBoxes(box1, box2) } };
     }
 
     pub fn getCenter(self: Sphere, time: f32) Vec3 {
@@ -40,7 +43,11 @@ pub const Sphere = struct {
         return self.center1 + vec3.splat3(time) * self.center_vec;
     }
 
-    pub fn hit(self: Sphere, r: ray.Ray, ray_t: *interval.Interval, rec: *hittable.HitRecord) bool {
+    pub fn hit(
+        self: Sphere,
+        r: ray.Ray,
+        ray_t: interval.Interval,
+    ) ?HitRecord {
         const center = if (self.is_moving) self.getCenter(r.time) else self.center1;
         const oc = r.origin - center;
 
@@ -48,7 +55,7 @@ pub const Sphere = struct {
         const half_b = vec3.dot(oc, r.direction);
         const c = vec3.lengthSquared(oc) - self.radius * self.radius;
         const discriminant = half_b * half_b - a * c;
-        if (discriminant < 0) return false;
+        if (discriminant < 0) return null;
 
         const sqrtd = @sqrt(discriminant);
 
@@ -56,16 +63,16 @@ pub const Sphere = struct {
         var root = (-half_b - sqrtd) / a;
         if (!ray_t.surrounds(root)) {
             root = (-half_b + sqrtd) / a;
-            if (!ray_t.surrounds(root)) return false;
+            if (!ray_t.surrounds(root)) return null;
         }
 
+        var rec = hittable.HitRecord{};
         rec.t = root;
         rec.p = r.at(rec.t);
         const outward_normal = (rec.p - center) / vec3.splat3(self.radius);
-        // const outward_normal = vec3.div(vec3.sub(rec.p, self.center), self.radius);
         rec.setFaceNormal(r, outward_normal);
         rec.mat = self.mat;
 
-        return true;
+        return rec;
     }
 };

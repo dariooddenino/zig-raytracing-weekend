@@ -34,8 +34,12 @@ pub const BVHTree = struct {
         BVHNode.deinit(self.allocator, self.root);
     }
 
-    pub fn hit(self: *const BVHTree, ray: Ray, ray_t: *Interval, rec: *HitRecord) bool {
-        return self.root.hit(ray, ray_t, rec);
+    pub fn boundingBox(self: BVHTree) Aabb {
+        return self.bounding_box;
+    }
+
+    pub fn hit(self: *const BVHTree, ray: Ray, ray_t: Interval) ?HitRecord {
+        return self.root.hit(ray, ray_t);
     }
 
     pub fn constructTree(allocator: std.mem.Allocator, src_objects: []Hittable, start: usize, end: usize) !*BVHNode {
@@ -117,20 +121,20 @@ pub const BVHNode = struct {
         allocator.destroy(n);
     }
 
-    pub fn hit(self: *const BVHNode, ray: Ray, ray_t: *Interval, rec: *HitRecord) bool {
+    pub fn hit(self: *const BVHNode, ray: Ray, ray_t: Interval) ?HitRecord {
         if (self.leaf) |hittable| {
-            return hittable.hit(ray, ray_t, rec);
+            return hittable.hit(ray, ray_t);
         }
 
         if (!self.bounding_box.hit(ray, ray_t)) {
-            return false;
+            return null;
         }
 
-        const hit_left = self.left.?.hit(ray, ray_t, rec);
-        var rInterval = Interval{ .min = ray_t.min, .max = if (hit_left) rec.t else ray_t.max };
-        const hit_right = self.right.?.hit(ray, &rInterval, rec);
+        const hit_record_left = self.left.?.hit(ray, ray_t);
+        const rInterval = Interval{ .min = ray_t.min, .max = if (hit_record_left != null) hit_record_left.?.t else ray_t.max };
+        const hit_record_right = self.right.?.hit(ray, rInterval);
 
-        return hit_left or hit_right;
+        return hit_record_right orelse hit_record_left orelse null;
     }
 };
 

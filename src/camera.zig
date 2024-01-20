@@ -9,13 +9,11 @@ const interval = @import("interval.zig");
 const material = @import("material.zig");
 const bvh = @import("bvh.zig");
 
-const BvhNode = bvh.BvhNode;
-const BVHNode = bvh.BVHNode;
-const BVHTree = bvh.BVHTree;
 const toFloat = rtweekend.toFloat;
+const Hittable = hittable_list.Hittable;
 
 // TODO move these two to their own file
-pub const Task = struct { thread_idx: u32, chunk_size: u32, world: BVHTree, camera: *Camera };
+pub const Task = struct { thread_idx: u32, chunk_size: u32, world: Hittable, camera: *Camera };
 
 pub const SharedStateImageWriter = struct {
     buffer: [][]color.ColorAndSamples,
@@ -72,62 +70,6 @@ pub const Camera = struct {
             }
         }
     }
-
-    // Old render
-    // pub fn render(self: *Camera, stdout: anytype, world: hittable_list.HittableList, multi_thread: bool) !void {
-    //     self.initialize();
-    //     try stdout.print("P3\n{d} {d}\n255\n", .{ self.image_width, self.image_height });
-    //     // TODO Maybe this should be a general purpose allocator?
-    //     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    //     const allocator = gpa.allocator();
-    //     defer _ = gpa.deinit();
-
-    //     if (multi_thread) {
-    //         const threads_num = 8;
-    //         const lines_per_thread: u16 = @as(u16, @intFromFloat(@ceil(@as(f32, @floatFromInt(self.image_height)) / @as(f32, @floatFromInt(threads_num)))));
-    //         var threads: [threads_num]std.Thread = undefined;
-    //         var results: [threads_num]std.ArrayList(vec3.Vec3) = undefined;
-
-    //         for (0..threads_num) |t| {
-    //             results[t] = std.ArrayList(vec3.Vec3).init(allocator);
-    //             threads[t] = try std.Thread.spawn(.{}, renderThread, .{ world, self.*, lines_per_thread, t, &results[t] });
-    //         }
-
-    //         var final_image: std.ArrayList(vec3.Vec3) = std.ArrayList(vec3.Vec3).init(allocator);
-
-    //         for (0..threads_num) |t| {
-    //             threads[t].join();
-
-    //             try final_image.appendSlice(results[t].items);
-
-    //             results[t].clearAndFree();
-    //         }
-
-    //         for (final_image.items) |pixel_color| {
-    //             try color.writeColor(stdout, pixel_color, self.samples_per_pixel);
-    //         }
-    //         final_image.clearAndFree();
-    //     } else {
-    //         var j: u16 = 0;
-
-    //         while (j < self.image_height) : (j += 1) {
-    //             var i: u16 = 0;
-    //             // TODO: I should flush here to avoid overwriting with Done?
-    //             std.debug.print("\rScanlines remaining: {d}", .{self.image_height - j});
-
-    //             while (i < self.image_width) : (i += 1) {
-    //                 var pixel_color = vec3.zero();
-    //                 var k: u16 = 0;
-    //                 while (k < self.samples_per_pixel) : (k += 1) {
-    //                     const r = self.getRay(i, j);
-    //                     pixel_color = pixel_color + rayColor(r, self.max_depth, world);
-    //                 }
-
-    //                 try color.writeColor(stdout, pixel_color, self.samples_per_pixel);
-    //             }
-    //         }
-    //     }
-    // }
 
     fn initialize(self: *Camera) !void {
         if (self.image_height == undefined)
@@ -193,20 +135,20 @@ pub const Camera = struct {
         return ray.Ray{ .origin = ray_origin, .direction = ray_direction, .time = ray_time };
     }
 
-    fn rayColor(self: Camera, r: ray.Ray, depth: u8, world: BVHTree) vec3.Vec3 {
+    fn rayColor(self: Camera, r: ray.Ray, depth: u8, world: Hittable) vec3.Vec3 {
         if (depth <= 0) {
             return vec3.zero();
         }
 
-        var rec = hittable.HitRecord{};
+        const ray_t = interval.Interval{ .min = 0.001, .max = rtweekend.infinity };
 
-        var ray_t = interval.Interval{ .min = 0.001, .max = rtweekend.infinity };
+        const opt_hit_record = world.hit(r, ray_t);
 
-        if (world.hit(r, &ray_t, &rec)) {
+        if (opt_hit_record) |hit_record| {
             var scattered = ray.Ray{};
             var attenuation = vec3.zero();
-            const mat = rec.mat;
-            if (mat.scatter(r, rec, &attenuation, &scattered)) {
+
+            if (hit_record.mat.scatter(r, hit_record, &attenuation, &scattered)) {
                 return attenuation * self.rayColor(scattered, depth - 1, world);
             }
             return vec3.zero();
@@ -218,61 +160,3 @@ pub const Camera = struct {
         return vec3.Vec3{ 1, 1, 1 } * vec3.splat3(1.0 - a) + vec3.Vec3{ 0.5, 0.7, 1.0 } * vec3.splat3(a);
     }
 };
-
-// fn renderThread(world: hittable_list.HittableList, self: Camera, lines_per_thread: u16, t: usize, result: *std.ArrayList(vec3.Vec3)) !void {
-//     const lines_start = lines_per_thread * t;
-//     const lines_left = self.image_height - lines_start;
-//     const lines_needed = @min(lines_left, lines_per_thread);
-//     var j: u16 = @intCast(lines_start);
-//     std.debug.print("THREAD: {d}, LXT: {d}, START: {d}, LEFT:{d}, NEEDED: {d}\n", .{ t, lines_per_thread, lines_start, lines_left, lines_needed });
-
-//     while (j < lines_start + lines_needed) : (j += 1) {
-//         var i: u16 = 0;
-//         // TODO: I should flush here to avoid overwriting with Done?
-//         // std.debug.print("\rScanlines remaining: {d}", .{self.image_height - j});
-
-//         while (i < self.image_width) : (i += 1) {
-//             var pixel_color = vec3.zero();
-//             var k: u16 = 0;
-//             while (k < self.samples_per_pixel) : (k += 1) {
-//                 const r = getRay(self, i, @intCast(j));
-//                 pixel_color = pixel_color + rayColor(r, self.max_depth, world);
-//             }
-//             try result.append(pixel_color);
-//         }
-//     }
-// }
-
-// fn getRay(self: Camera, i: u16, j: u16) ray.Ray {
-//     // Get a randomly sampled camera ray for the pixel at location i,j, originating from the camera defocus disk.
-//     // const pixel_center = vec3.add(self.pixel00_loc, vec3.add(vec3.mul(toFloat(i), self.pixel_delta_u), vec3.mul(toFloat(j), self.pixel_delta_v)));
-//     const pixel_center = self.pixel00_loc + self.pixel_delta_u * vec3.splat3(toFloat(i)) + self.pixel_delta_v * vec3.splat3(toFloat(j));
-//     const pixel_sample = pixel_center + self.pixelSampleSquare();
-
-//     const ray_origin = if (self.defocus_angle < 0) self.center else self.defocusDiskSample();
-//     const ray_direction = pixel_sample - ray_origin;
-
-//     return ray.Ray{ .origin = ray_origin, .direction = ray_direction };
-// }
-
-// fn rayColor(r: ray.Ray, depth: u8, world: anytype) vec3.Vec3 {
-//     var rec = hittable.HitRecord{};
-
-//     if (depth <= 0) {
-//         return vec3.zero();
-//     }
-
-//     if (world.hit(r, interval.Interval{ .min = 0.001 }, &rec)) {
-//         var scattered = ray.Ray{};
-//         var attenuation = vec3.zero();
-//         const mat = rec.mat;
-//         if (mat.scatter(r, rec, &attenuation, &scattered))
-//             return attenuation * rayColor(scattered, depth - 1, world);
-
-//         return vec3.zero();
-//     }
-
-//     const unit_direction = vec3.unitVector(r.direction);
-//     const a: f32 = 0.5 * (unit_direction[1] + 1.0);
-//     return vec3.Vec3{ 1, 1, 1 } * vec3.splat3(1.0 - a) + vec3.Vec3{ 0.5, 0.7, 1.0 } * vec3.splat3(a);
-// }
