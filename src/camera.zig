@@ -10,10 +10,12 @@ const material = @import("material.zig");
 const bvh = @import("bvh.zig");
 
 const BvhNode = bvh.BvhNode;
+const BVHNode = bvh.BVHNode;
+const BVHTree = bvh.BVHTree;
 const toFloat = rtweekend.toFloat;
 
 // TODO move these two to their own file
-pub const Task = struct { thread_idx: u32, chunk_size: u32, world: BvhNode, camera: *Camera };
+pub const Task = struct { thread_idx: u32, chunk_size: u32, world: BVHTree, camera: *Camera };
 
 pub const SharedStateImageWriter = struct {
     buffer: [][]color.ColorAndSamples,
@@ -58,32 +60,17 @@ pub const Camera = struct {
         const start_at = context.thread_idx * context.chunk_size;
         const end_before = start_at + context.chunk_size;
 
-        // var totrays: u64 = 0;
-        // var hitrays: u64 = 0;
-
         for (1..self.samples_per_pixel + 1) |number_of_samples| {
             for (start_at..end_before) |i| {
-                // totrays += 1;
                 const x: u32 = @intCast(@mod(i, self.image_width) + 1);
                 const y: u32 = @intCast(@divTrunc(i, self.image_width) + 1);
 
                 const r = self.getRay(x, y);
                 const ray_color = self.rayColor(r, self.max_depth, context.world);
 
-                // if (i == 0 and number_of_samples == 1) {
-                //     std.debug.print("ray {}\n", .{r});
-                //     std.debug.print("ray_color {}\n", .{ray_color});
-                // }
-
-                // std.debug.print("{}", .{ray_color});
-                // if (@abs(ray_color[0]) > 0.01 or @abs(ray_color[1]) > 0.01 or @abs(ray_color[2]) > 0.01) {
-                //     hitrays += 1;
-                // }
-
                 try self.writer.writeColor(x - 1, y - 1, ray_color, number_of_samples);
             }
         }
-        // std.debug.print("Tot: {d}, Hits: {d}\n\n", .{ totrays, hitrays });
     }
 
     // Old render
@@ -170,10 +157,8 @@ pub const Camera = struct {
         self.pixel_delta_v = viewport_v / vec3.splat3(toFloat(self.image_height));
 
         // Calculate the location of the upper left pixel.
-        // const viewport_upper_left = vec3.sub(self.center, vec3.add(vec3.mul(self.focus_dist, self.w), vec3.add(vec3.div(viewport_u, 2.0), vec3.div(viewport_v, 2.0))));
         const viewport_upper_left = self.center - vec3.splat3(self.focus_dist) * self.w - viewport_u / vec3.splat3(2.0) - viewport_v / vec3.splat3(2.0);
 
-        // self.pixel00_loc = vec3.add(viewport_upper_left, vec3.mul(0.5, vec3.add(self.pixel_delta_u, self.pixel_delta_v)));
         self.pixel00_loc = viewport_upper_left + vec3.splat3(0.5) * (self.pixel_delta_u + self.pixel_delta_v);
 
         // Calculate the camera defocus disk basis vector.
@@ -193,7 +178,6 @@ pub const Camera = struct {
         const px = -0.5 + rtweekend.randomDouble();
         const py = -0.5 + rtweekend.randomDouble();
         return vec3.splat3(px) * self.pixel_delta_u + vec3.splat3(py) * self.pixel_delta_v;
-        // return (vec3.add(vec3.mul(px, self.pixel_delta_u), vec3.mul(py, self.pixel_delta_v)));
     }
 
     fn getRay(self: Camera, i: u32, j: u32) ray.Ray {
@@ -202,14 +186,14 @@ pub const Camera = struct {
         const pixel_center = self.pixel00_loc + self.pixel_delta_u * vec3.splat3(toFloat(i)) + self.pixel_delta_v * vec3.splat3(toFloat(j));
         const pixel_sample = pixel_center + self.pixelSampleSquare();
 
-        const ray_origin = if (self.defocus_angle < 0) self.center else self.defocusDiskSample();
+        const ray_origin = if (self.defocus_angle <= 0) self.center else self.defocusDiskSample();
         const ray_direction = pixel_sample - ray_origin;
         const ray_time = rtweekend.randomDouble();
 
         return ray.Ray{ .origin = ray_origin, .direction = ray_direction, .time = ray_time };
     }
 
-    fn rayColor(self: Camera, r: ray.Ray, depth: u8, world: BvhNode) vec3.Vec3 {
+    fn rayColor(self: Camera, r: ray.Ray, depth: u8, world: BVHTree) vec3.Vec3 {
         if (depth <= 0) {
             return vec3.zero();
         }
@@ -219,33 +203,19 @@ pub const Camera = struct {
         var ray_t = interval.Interval{ .min = 0.001, .max = rtweekend.infinity };
 
         if (world.hit(r, &ray_t, &rec)) {
-            // if (depth >= self.max_depth - 20) {
-            //     std.debug.print("\n[H] ", .{});
-            // }
-
             var scattered = ray.Ray{};
             var attenuation = vec3.zero();
             const mat = rec.mat;
             if (mat.scatter(r, rec, &attenuation, &scattered)) {
-                // if (depth == self.max_depth) {
-                //     std.debug.print("[S] \n", .{});
-                // }
-                return attenuation * rayColor(self, scattered, depth - 1, world);
+                return attenuation * self.rayColor(scattered, depth - 1, world);
             }
-            // if (depth == self.max_depth) {
-            //     std.debug.print("[B] \n", .{});
-            // }
             return vec3.zero();
         }
 
-        // if (depth == self.max_depth) {
-        //     std.debug.print("[M] \n", .{});
-        // }
-        // return vec3.zero();
         // NOTE: this was giving me a flat white now?
         const unit_direction = vec3.unitVector(r.direction);
         const a: f32 = 0.5 * (unit_direction[1] + 1.0);
-        return vec3.splat3(1.0 - a) + vec3.Vec3{ 0.5, 0.7, 1.0 } * vec3.splat3(a);
+        return vec3.Vec3{ 1, 1, 1 } * vec3.splat3(1.0 - a) + vec3.Vec3{ 0.5, 0.7, 1.0 } * vec3.splat3(a);
     }
 };
 

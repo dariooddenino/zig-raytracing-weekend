@@ -26,6 +26,8 @@ const HittableList = hittable_list.HittableList;
 const Camera = camera.Camera;
 const SharedStateImageWriter = camera.SharedStateImageWriter;
 const Task = camera.Task;
+const BVHTree = bvh.BVHTree;
+const BVHNode = bvh.BVHNode;
 
 const ObjectList = std.ArrayList(Hittable);
 
@@ -40,7 +42,7 @@ const ObjectList = std.ArrayList(Hittable);
 const image_width: u32 = 400;
 const aspect_ratio = 16.0 / 9.0;
 const image_height: u32 = @intFromFloat(@round(toFloat(image_width) / aspect_ratio));
-const number_of_threads = 1;
+const number_of_threads = 8;
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 var arena = std.heap.ArenaAllocator.init(gpa.allocator());
@@ -65,18 +67,18 @@ pub fn main() !void {
     defer objects.deinit();
 
     // Generate a random world.
-    const world = try generateWorld(objects);
+    const world = try generateWorld(&objects);
 
-    std.debug.print("World bounding box: {}\n", .{world.bounding_box});
-    std.debug.print("World elemenets: {d}\n", .{world.count()});
+    // std.debug.print("World bounding box: {}\n", .{world.bounding_box});
+    // std.debug.print("World elemenets: {d}\n", .{world.count()});
 
     // Initialize camera and render frame.
     var cam = Camera{
         .aspect_ratio = aspect_ratio,
         .image_width = image_width,
         .image_height = image_height,
-        .samples_per_pixel = 500,
-        .max_depth = 80,
+        .samples_per_pixel = 100,
+        .max_depth = 20,
         .vfov = 20,
         .lookfrom = Vec3{ 13, 2, 3 },
         .lookat = vec3.zero(),
@@ -102,6 +104,8 @@ pub fn main() !void {
         thread.join();
     }
 
+    std.debug.print("DONE\n", .{});
+
     //// OLD CODE BELOW
 
     // stdout is for the actual output of your application, for example if you
@@ -119,7 +123,7 @@ pub fn renderFn(context: Task) !void {
     try context.camera.render(context);
 }
 
-fn generateWorld(objects: ObjectList) !BvhNode {
+fn generateWorld(objects: *ObjectList) !BVHTree {
     var world = hittable_list.HittableList{ .objects = objects };
 
     const ground_material = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{ 0.5, 0.5, 0.5 }) };
@@ -129,10 +133,10 @@ fn generateWorld(objects: ObjectList) !BvhNode {
     // TODO when I enable all these spheres (even if few) things go completely crazy.
     // TODO it looks like the big spheres are cut, i.e. their bounding boxes are ifnluenced by the small ones.
     // TODO I need to make more tests on this in aabb.
-    var a: f32 = -1;
-    while (a < 1) : (a += 1) {
-        var b: f32 = -2;
-        while (b < 2) : (b += 1) {
+    var a: f32 = -11;
+    while (a < 11) : (a += 1) {
+        var b: f32 = -11;
+        while (b < 11) : (b += 1) {
             const choose_mat = rtweekend.randomDouble();
             const center = Vec3{ a + 0.9 * rtweekend.randomDouble(), 0.2, b + 0.9 * rtweekend.randomDouble() };
 
@@ -171,5 +175,8 @@ fn generateWorld(objects: ObjectList) !BvhNode {
     const material3 = material.Material{ .metal = material.Metal.fromColor(Vec3{ 0.7, 0.6, 0.5 }, 0.1) };
     try world.add(sphere.Sphere.init(Vec3{ 4, 1, 0 }, 1.0, material3));
 
-    return try BvhNode.init(allocator, &world.objects);
+    // return try BvhNode.init(allocator, &world.objects);
+    const tree = try BVHTree.init(allocator, objects.items, 0, objects.items.len);
+
+    return tree;
 }

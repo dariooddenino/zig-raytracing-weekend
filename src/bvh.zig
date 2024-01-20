@@ -1,20 +1,140 @@
 const std = @import("std");
 const hittable_list = @import("hittable_list.zig");
 const aabb = @import("aabb.zig");
-const ray = @import("ray.zig");
+const rays = @import("ray.zig");
 const interval = @import("interval.zig");
-const hittable = @import("hittable.zig");
+const hittables = @import("hittable.zig");
 const rtweekend = @import("rtweekend.zig");
 const material = @import("material.zig");
 const vec3 = @import("vec3.zig");
 const sphere = @import("sphere.zig");
 
 const Vec3 = vec3.Vec3;
-const Ray = ray.Ray;
+const Ray = rays.Ray;
 const Hittable = hittable_list.Hittable;
-const HitRecord = hittable.HitRecord;
+const HitRecord = hittables.HitRecord;
 const Aabb = aabb.Aabb;
 const Interval = interval.Interval;
+
+pub const BVHTree = struct {
+    allocator: std.mem.Allocator,
+    root: *const BVHNode,
+    bounding_box: Aabb,
+
+    pub fn init(allocator: std.mem.Allocator, src_objects: []Hittable, start: usize, end: usize) !BVHTree {
+        const root = try constructTree(allocator, src_objects, start, end);
+        return BVHTree{
+            .allocator = allocator,
+            .root = root,
+            .bounding_box = root.bounding_box,
+        };
+    }
+
+    pub fn deinit(self: *const BVHTree) void {
+        BVHNode.deinit(self.allocator, self.root);
+    }
+
+    pub fn hit(self: *const BVHTree, ray: Ray, ray_t: *Interval, rec: *HitRecord) bool {
+        return self.root.hit(ray, ray_t, rec);
+    }
+
+    pub fn constructTree(allocator: std.mem.Allocator, src_objects: []Hittable, start: usize, end: usize) !*BVHNode {
+        var left: *BVHNode = undefined;
+        var right: *BVHNode = undefined;
+
+        const obj_span = end - start;
+        const axis = rtweekend.randomIntRange(0, 2);
+
+        switch (obj_span) {
+            1 => {
+                return makeLeaf(allocator, &src_objects[start]);
+            },
+            2 => {
+                if (boxComparator(axis, src_objects[start], src_objects[start + 1])) {
+                    left = try makeLeaf(allocator, &src_objects[start]);
+                    right = try makeLeaf(allocator, &src_objects[start + 1]);
+                } else {
+                    left = try makeLeaf(allocator, &src_objects[start + 1]);
+                    right = try makeLeaf(allocator, &src_objects[start]);
+                }
+            },
+            else => {
+                std.sort.heap(Hittable, src_objects[start..end], axis, boxComparator);
+                const mid = start + obj_span / 2;
+                left = try constructTree(allocator, src_objects, start, mid);
+                right = try constructTree(allocator, src_objects, mid, end);
+            },
+        }
+        return makeNode(allocator, left, right, Aabb.fromBoxes(left.bounding_box, right.bounding_box));
+    }
+
+    fn makeNode(allocator: std.mem.Allocator, left: *const BVHNode, right: *const BVHNode, bounding_box: Aabb) !*BVHNode {
+        const result = try allocator.create(BVHNode);
+        result.left = left;
+        result.right = right;
+        result.leaf = null;
+        result.bounding_box = bounding_box;
+        return result;
+    }
+
+    fn makeLeaf(allocator: std.mem.Allocator, hittable: *const Hittable) !*BVHNode {
+        const result = try allocator.create(BVHNode);
+        result.leaf = hittable;
+        result.left = null;
+        result.right = null;
+        result.bounding_box = hittable.boundingBox();
+        return result;
+    }
+
+    fn boxCompare(a: Hittable, b: Hittable, axis_index: u32) bool {
+        return a.boundingBox().axis(axis_index).min < b.boundingBox().axis(axis_index).min;
+    }
+
+    fn boxComparator(axis: u32, a: Hittable, b: Hittable) bool {
+        if (axis == 0) {
+            return boxCompare(a, b, 0);
+        } else if (axis == 1) {
+            return boxCompare(a, b, 1);
+        } else {
+            return boxCompare(a, b, 2);
+        }
+    }
+};
+
+pub const BVHNode = struct {
+    leaf: ?*const Hittable = null,
+    left: ?*const BVHNode = null,
+    right: ?*const BVHNode = null,
+    bounding_box: Aabb = undefined,
+
+    pub fn deinit(allocator: std.mem.Allocator, n: *const BvhNode) void {
+        if (n.left) |node| {
+            deinit(allocator, node);
+        }
+        if (n.right) |node| {
+            deinit(allocator, node);
+        }
+        allocator.destroy(n);
+    }
+
+    pub fn hit(self: *const BVHNode, ray: Ray, ray_t: *Interval, rec: *HitRecord) bool {
+        if (self.leaf) |hittable| {
+            return hittable.hit(ray, ray_t, rec);
+        }
+
+        if (!self.bounding_box.hit(ray, ray_t)) {
+            return false;
+        }
+
+        const hit_left = self.left.?.hit(ray, ray_t, rec);
+        var rInterval = Interval{ .min = ray_t.min, .max = if (hit_left) rec.t else ray_t.max };
+        const hit_right = self.right.?.hit(ray, &rInterval, rec);
+
+        return hit_left or hit_right;
+    }
+};
+
+// NOTE: old code below
 
 // NOTE: trying to make this work in any way...
 pub const Empty = struct {
@@ -218,7 +338,7 @@ test "bounding box" {
 
     const r = Ray{ .origin = vec3.Vec3{ 1, 1, 1 }, .direction = vec3.Vec3{ -1, -1, -1 } };
     var ray_t = interval.Interval{ .min = 0.001, .max = rtweekend.infinity };
-    var rec = hittable.HitRecord{};
+    var rec = HitRecord{};
 
     const hit = node.hit(r, &ray_t, &rec);
 
@@ -226,7 +346,7 @@ test "bounding box" {
 
     const r2 = Ray{ .origin = vec3.Vec3{ 1, 1, 1 }, .direction = vec3.Vec3{ 1, 1, 1 } };
     var ray_t2 = interval.Interval{ .min = 0.001, .max = rtweekend.infinity };
-    var rec2 = hittable.HitRecord{};
+    var rec2 = HitRecord{};
 
     const hit2 = node.hit(r2, &ray_t2, &rec2);
 

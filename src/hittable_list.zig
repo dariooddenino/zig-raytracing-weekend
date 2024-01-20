@@ -27,7 +27,7 @@ pub const Hittable = union(enum) {
 // pub fn hittableList(comptime val_type: type) type {
 // return struct {
 pub const HittableList = struct {
-    objects: std.ArrayList(Hittable),
+    objects: *std.ArrayList(Hittable),
     // bounding_box: Aabb = Aabb{},
 
     pub inline fn add(self: *HittableList, object: anytype) !void {
