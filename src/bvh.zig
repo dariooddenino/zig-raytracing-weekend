@@ -147,11 +147,17 @@ pub const BvhNode = struct {
     pub fn hit(self: BvhNode, r: Ray, ray_t: *Interval, rec: *HitRecord) bool {
         if (!self.boundingBox().hit(r, ray_t)) return false;
 
-        const hit_left = self.left.hit(r, ray_t, rec);
+        var temp_rec_l = HitRecord{};
+        var temp_rec_r = HitRecord{};
+
+        const hit_left = self.left.hit(r, ray_t, &temp_rec_l);
         // var hit_right = false;
         // if (self.right.*) |right| {
-        const hit_right = self.right.hit(r, ray_t, rec);
+        const hit_right = self.right.hit(r, ray_t, &temp_rec_r);
         // }
+
+        if (hit_left) rec.* = temp_rec_l;
+        if (hit_right) rec.* = temp_rec_r;
 
         return hit_left or hit_right;
     }
