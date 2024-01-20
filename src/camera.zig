@@ -58,14 +58,12 @@ pub const Camera = struct {
         const start_at = context.thread_idx * context.chunk_size;
         const end_before = start_at + context.chunk_size;
 
-        std.debug.print("Start at {d}, end before {d}\n\n", .{ start_at, end_before });
-
-        var totrays: u64 = 0;
-        var hitrays: u64 = 0;
+        // var totrays: u64 = 0;
+        // var hitrays: u64 = 0;
 
         for (1..self.samples_per_pixel + 1) |number_of_samples| {
             for (start_at..end_before) |i| {
-                totrays += 1;
+                // totrays += 1;
                 const x: u32 = @intCast(@mod(i, self.image_width) + 1);
                 const y: u32 = @intCast(@divTrunc(i, self.image_width) + 1);
 
@@ -78,14 +76,14 @@ pub const Camera = struct {
                 // }
 
                 // std.debug.print("{}", .{ray_color});
-                if (@abs(ray_color[0]) > 0.01 and @abs(ray_color[1]) > 0.01 and @abs(ray_color[2]) > 0.01) {
-                    hitrays += 1;
-                }
+                // if (@abs(ray_color[0]) > 0.01 or @abs(ray_color[1]) > 0.01 or @abs(ray_color[2]) > 0.01) {
+                //     hitrays += 1;
+                // }
 
                 try self.writer.writeColor(x - 1, y - 1, ray_color, number_of_samples);
             }
         }
-        std.debug.print("Tot: {d}, Hits: {d}\n\n", .{ totrays, hitrays });
+        // std.debug.print("Tot: {d}, Hits: {d}\n\n", .{ totrays, hitrays });
     }
 
     // Old render
@@ -243,11 +241,11 @@ pub const Camera = struct {
         // if (depth == self.max_depth) {
         //     std.debug.print("[M] \n", .{});
         // }
-        return vec3.zero();
+        // return vec3.zero();
         // NOTE: this was giving me a flat white now?
-        // const unit_direction = vec3.unitVector(r.direction);
-        // const a: f32 = 0.5 * (unit_direction[1] + 1.0);
-        // return vec3.splat3(1.0 - a) + vec3.Vec3{ 0.5, 0.7, 1.0 } * vec3.splat3(a);
+        const unit_direction = vec3.unitVector(r.direction);
+        const a: f32 = 0.5 * (unit_direction[1] + 1.0);
+        return vec3.splat3(1.0 - a) + vec3.Vec3{ 0.5, 0.7, 1.0 } * vec3.splat3(a);
     }
 };
 

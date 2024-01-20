@@ -16,9 +16,21 @@ const HitRecord = hittable.HitRecord;
 const Aabb = aabb.Aabb;
 const Interval = interval.Interval;
 
+// NOTE: trying to make this work in any way...
+pub const Empty = struct {
+    pub fn boundingBox(_: Empty) Aabb {
+        return Aabb{};
+    }
+
+    pub fn hit(_: Empty, _: Ray, _: *Interval, _: *HitRecord) bool {
+        return false;
+    }
+};
+
 pub const BvhInner = union(enum) {
     bvh: BvhNode,
     hittable: Hittable,
+    empty: Empty,
 
     pub fn print(self: BvhInner, i: u32) void {
         switch (self) {
@@ -26,7 +38,10 @@ pub const BvhInner = union(enum) {
                 b.print(i);
             },
             .hittable => |h| {
-                std.debug.print("HIT [{d}]: {}\n\n", .{ i, h.sphere.center1 });
+                std.debug.print("{d}: HITTABLE {}\n", .{ i, h.sphere.center1 });
+            },
+            .empty => |_| {
+                std.debug.print("{d}: EMPTY\n", .{i});
             },
         }
     }
@@ -46,38 +61,20 @@ pub const BvhInner = union(enum) {
 
 pub const BvhNode = struct {
     left: *BvhInner,
-    right: *?BvhInner,
+    right: *BvhInner,
     bounding_box: Aabb = Aabb{},
 
     pub fn print(self: BvhNode, i: u32) void {
-        std.debug.print("\nNODE [{d}]\n", .{i});
-        std.debug.print("LEFT [{d}]  {}\n", .{ i, self.left.* });
+        std.debug.print("\n\n{d}: NODE\n", .{i});
         self.left.print(i + 1);
-        if (self.right.*) |right| {
-            std.debug.print("RIGHT [{d}] {}\n", .{ i, right });
-            right.print(i + 1);
-        } else {
-            std.debug.print("NO RIGHT\n", .{});
-        }
-    }
+        self.right.print(i + 1);
 
-    pub fn length(self: BvhNode) u32 {
-        var left_length: u32 = 0;
-        var right_length: u32 = 0;
-
-        switch (self.left.*) {
-            .hittable => |_| left_length += 1,
-            .bvh => |n| left_length += n.length(),
-        }
-
-        if (self.right.*) |r| {
-            switch (r) {
-                .hittable => |_| right_length += 1,
-                .bvh => |n| right_length += n.length(),
-            }
-        }
-
-        return left_length + right_length;
+        // if (self.right.*) |right| {
+        //     std.debug.print("RIGHT [{d}] {}\n", .{ i, right });
+        //     right.print(i + 1);
+        // } else {
+        //     std.debug.print("NO RIGHT\n", .{});
+        // }
     }
 
     pub fn boundingBox(self: BvhNode) Aabb {
@@ -90,10 +87,10 @@ pub const BvhNode = struct {
 
     pub fn initDet(allocator: std.mem.Allocator, objects: *std.ArrayList(Hittable), start: usize, end: usize) !BvhNode {
         // var objects = src_objects;
-        var left: BvhInner = undefined;
-        var right: ?BvhInner = null;
+        var left: *BvhInner = try allocator.create(BvhInner);
+        var right: *BvhInner = try allocator.create(BvhInner);
         var bounding_box: Aabb = undefined;
-        std.debug.print("\ninitDet with {d} objects, start {d}, end {d}\n", .{ objects.items.len, start, end });
+        // std.debug.print("\ninitDet with {d} objects, start {d}, end {d}\n", .{ objects.items.len, start, end });
         const axis = rtweekend.randomIntRange(0, 2);
 
         const object_span = end - start;
@@ -101,20 +98,20 @@ pub const BvhNode = struct {
 
         if (object_span == 1) {
             // Last object.
-            std.debug.print("Getting into span 1\n", .{});
-            left = BvhInner{ .hittable = objects.items[start] };
-            right = null;
+            // std.debug.print("Getting into span 1\n", .{});
+            left.* = BvhInner{ .hittable = objects.items[start] };
+            right.* = BvhInner{ .empty = Empty{} };
         } else if (object_span == 2) {
-            std.debug.print("Getting into span 2\n", .{});
+            // std.debug.print("Getting into span 2\n", .{});
             if (comparator(axis, objects.items[start], objects.items[start + 1])) {
-                left = BvhInner{ .hittable = objects.items[start] };
-                right = BvhInner{ .hittable = objects.items[start + 1] };
+                left.* = BvhInner{ .hittable = objects.items[start] };
+                right.* = BvhInner{ .hittable = objects.items[start + 1] };
             } else {
-                left = BvhInner{ .hittable = objects.items[start + 1] };
-                right = BvhInner{ .hittable = objects.items[start] };
+                left.* = BvhInner{ .hittable = objects.items[start + 1] };
+                right.* = BvhInner{ .hittable = objects.items[start] };
             }
         } else {
-            std.debug.print("Getting into span 3\n", .{});
+            // std.debug.print("Getting into span 3\n", .{});
             // TODO need to implement this
             // std::sort (objects.begin() + start, objects.begin() + end, comparator);
             // const lobjects = objects.toOwnedSlice();
@@ -124,15 +121,15 @@ pub const BvhNode = struct {
             objects.* = std.ArrayList(Hittable).fromOwnedSlice(allocator, objects_slice);
 
             const mid = start + object_span / 2;
-            left = BvhInner{ .bvh = try BvhNode.initDet(allocator, objects, start, mid) };
-            right = BvhInner{ .bvh = try BvhNode.initDet(allocator, objects, mid, end) };
+            left.* = BvhInner{ .bvh = try BvhNode.initDet(allocator, objects, start, mid) };
+            right.* = BvhInner{ .bvh = try BvhNode.initDet(allocator, objects, mid, end) };
         }
 
-        if (right) |r| {
-            bounding_box = Aabb.fromBoxes(left.boundingBox(), r.boundingBox());
-        } else {
-            bounding_box = left.boundingBox();
-        }
+        // if (right) |r| {
+        bounding_box = Aabb.fromBoxes(left.boundingBox(), right.boundingBox());
+        // } else {
+        //     bounding_box = left.boundingBox();
+        // }
 
         // @breakpoint();
         // left.print(0);
@@ -144,17 +141,17 @@ pub const BvhNode = struct {
 
         // std.debug.print("The step bounding box is {}\n", .{bounding_box});
 
-        return BvhNode{ .left = &left, .right = &right, .bounding_box = bounding_box };
+        return BvhNode{ .left = left, .right = right, .bounding_box = bounding_box };
     }
 
     pub fn hit(self: BvhNode, r: Ray, ray_t: *Interval, rec: *HitRecord) bool {
         if (!self.boundingBox().hit(r, ray_t)) return false;
 
         const hit_left = self.left.hit(r, ray_t, rec);
-        var hit_right = false;
-        if (self.right.*) |right| {
-            hit_right = right.hit(r, ray_t, rec);
-        }
+        // var hit_right = false;
+        // if (self.right.*) |right| {
+        const hit_right = self.right.hit(r, ray_t, rec);
+        // }
 
         return hit_left or hit_right;
     }
@@ -209,28 +206,4 @@ test "bounding box" {
     const hit2 = node.hit(r2, &ray_t2, &rec2);
 
     try std.testing.expect(!hit2);
-}
-
-test "tree generation" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    var arena = std.heap.ArenaAllocator.init(gpa.allocator());
-    const allocator = arena.allocator();
-    defer arena.deinit();
-
-    var objects = std.ArrayList(Hittable).init(allocator);
-    defer objects.deinit();
-
-    var world = hittable_list.HittableList{ .objects = objects };
-    const material1 = material.Material{ .dielectric = material.Dielectric{ .ir = 1.5 } };
-    try world.add(sphere.Sphere.init(Vec3{ 0, 1, 0 }, 1.0, material1));
-
-    const material2 = material.Material{ .lambertian = material.Lambertian.fromColor(Vec3{ 0.4, 0.2, 0.1 }) };
-    try world.add(sphere.Sphere.init(Vec3{ -4, 1, 0 }, 1.0, material2));
-
-    const material3 = material.Material{ .metal = material.Metal.fromColor(Vec3{ 0.7, 0.6, 0.5 }, 0.1) };
-    try world.add(sphere.Sphere.init(Vec3{ 4, 1, 0 }, 1.0, material3));
-
-    const node = try BvhNode.init(allocator, &world.objects);
-
-    try std.testing.expectEqual(3, node.length());
 }
