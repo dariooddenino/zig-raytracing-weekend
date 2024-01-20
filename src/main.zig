@@ -67,7 +67,8 @@ pub fn main() !void {
     // Generate a random world.
     const world = try generateWorld(objects);
 
-    std.debug.print("World bounding box: {}", .{world.bounding_box});
+    std.debug.print("World bounding box: {}\n", .{world.bounding_box});
+    std.debug.print("World elemenets: {d}\n", .{world.count()});
 
     // Initialize camera and render frame.
     var cam = Camera{
@@ -121,43 +122,45 @@ pub fn renderFn(context: Task) !void {
 fn generateWorld(objects: ObjectList) !BvhNode {
     var world = hittable_list.HittableList{ .objects = objects };
 
-    // NOTE: I get a crash by enabling this
     const ground_material = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{ 0.5, 0.5, 0.5 }) };
     const ground = sphere.Sphere.init(vec3.Vec3{ 0, -1000, -1 }, 1000, ground_material);
     try world.add(ground);
 
-    // var a: f32 = -11;
-    // while (a < 11) : (a += 1) {
-    //     var b: f32 = -11;
-    //     while (b < 11) : (b += 1) {
-    //         const choose_mat = rtweekend.randomDouble();
-    //         const center = Vec3{ a + 0.9 * rtweekend.randomDouble(), 0.2, b + 0.9 * rtweekend.randomDouble() };
+    // TODO when I enable all these spheres (even if few) things go completely crazy.
+    // TODO it looks like the big spheres are cut, i.e. their bounding boxes are ifnluenced by the small ones.
+    // TODO I need to make more tests on this in aabb.
+    var a: f32 = -1;
+    while (a < 1) : (a += 1) {
+        var b: f32 = -2;
+        while (b < 2) : (b += 1) {
+            const choose_mat = rtweekend.randomDouble();
+            const center = Vec3{ a + 0.9 * rtweekend.randomDouble(), 0.2, b + 0.9 * rtweekend.randomDouble() };
 
-    //         if (vec3.length(center - Vec3{ 4, 0.2, 0 }) > 0.9) {
-    //             // TODO: this was a shared_ptr, not entirely sure why and how to replicate.
-    //             // var sphere_material = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{}) };
+            if (vec3.length(center - Vec3{ 4, 0.2, 0 }) > 0.9) {
+                // TODO: this was a shared_ptr, not entirely sure why and how to replicate.
+                // var sphere_material = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{}) };
 
-    //             if (choose_mat < 0.8) {
-    //                 // diffuse
-    //                 const albedo = vec3.random() * vec3.random();
-    //                 const sphere_material = material.Material{ .lambertian = material.Lambertian.fromColor(albedo) };
-    //                 const center2 = center + Vec3{ 0, rtweekend.randomDoubleRange(0, 0.5), 0 };
-    //                 const spherei = sphere.Sphere.initMoving(center, center2, 0.2, sphere_material);
-    //                 try world.add(spherei);
-    //             } else if (choose_mat < 0.95) {
-    //                 // metal
-    //                 const albedo = vec3.randomRange(0.5, 1);
-    //                 const fuzz = rtweekend.randomDoubleRange(0, 0.5);
-    //                 const sphere_material = material.Material{ .metal = material.Metal.fromColor(albedo, fuzz) };
-    //                 try world.add(sphere.Sphere{ .center1 = center, .radius = 0.2, .mat = sphere_material });
-    //             } else {
-    //                 // glass
-    //                 const sphere_material = material.Material{ .dielectric = material.Dielectric{ .ir = 1.5 } };
-    //                 try world.add(sphere.Sphere{ .center1 = center, .radius = 0.2, .mat = sphere_material });
-    //             }
-    //         }
-    //     }
-    // }
+                if (choose_mat < 0.8) {
+                    // diffuse
+                    // const albedo = vec3.random() * vec3.random();
+                    // const sphere_material = material.Material{ .lambertian = material.Lambertian.fromColor(albedo) };
+                    // const center2 = center + Vec3{ 0, rtweekend.randomDoubleRange(0, 0.5), 0 };
+                    // const spherei = sphere.Sphere.initMoving(center, center2, 0.2, sphere_material);
+                    // try world.add(spherei);
+                } else if (choose_mat < 0.95) {
+                    // metal
+                    const albedo = vec3.randomRange(0.5, 1);
+                    const fuzz = rtweekend.randomDoubleRange(0, 0.5);
+                    const sphere_material = material.Material{ .metal = material.Metal.fromColor(albedo, fuzz) };
+                    try world.add(sphere.Sphere.init(center, 0.2, sphere_material));
+                } else {
+                    // glass
+                    // const sphere_material = material.Material{ .dielectric = material.Dielectric{ .ir = 1.5 } };
+                    // try world.add(sphere.Sphere.init(center, 0.2, sphere_material));
+                }
+            }
+        }
+    }
 
     const material1 = material.Material{ .dielectric = material.Dielectric{ .ir = 1.5 } };
     try world.add(sphere.Sphere.init(Vec3{ 0, 1, 0 }, 1.0, material1));

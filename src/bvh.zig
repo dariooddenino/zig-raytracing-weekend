@@ -32,6 +32,14 @@ pub const BvhInner = union(enum) {
     hittable: Hittable,
     empty: Empty,
 
+    pub fn count(self: BvhInner) u32 {
+        switch (self) {
+            .bvh => |b| return b.count(),
+            .hittable => |_| return 1,
+            .empty => |_| return 0,
+        }
+    }
+
     pub fn print(self: BvhInner, i: u32) void {
         switch (self) {
             .bvh => |b| {
@@ -75,6 +83,15 @@ pub const BvhNode = struct {
         // } else {
         //     std.debug.print("NO RIGHT\n", .{});
         // }
+    }
+
+    pub fn count(self: BvhNode) u32 {
+        var le: u32 = 0;
+        var re: u32 = 0;
+
+        le += self.left.count();
+        re += self.right.count();
+        return le + re;
     }
 
     pub fn boundingBox(self: BvhNode) Aabb {
@@ -147,17 +164,19 @@ pub const BvhNode = struct {
     pub fn hit(self: BvhNode, r: Ray, ray_t: *Interval, rec: *HitRecord) bool {
         if (!self.boundingBox().hit(r, ray_t)) return false;
 
-        var temp_rec_l = HitRecord{};
-        var temp_rec_r = HitRecord{};
+        // var temp_rec_l = HitRecord{};
+        // var temp_rec_r = HitRecord{};
 
-        const hit_left = self.left.hit(r, ray_t, &temp_rec_l);
+        const hit_left = self.left.hit(r, ray_t, rec);
         // var hit_right = false;
         // if (self.right.*) |right| {
-        const hit_right = self.right.hit(r, ray_t, &temp_rec_r);
+        // const hit_right = self.right.hit(r, ray_t, &temp_rec_r);
         // }
+        var rInterval = Interval{ .min = ray_t.min, .max = if (hit_left) rec.t else ray_t.max };
+        const hit_right = self.right.hit(r, &rInterval, rec);
 
-        if (hit_left) rec.* = temp_rec_l;
-        if (hit_right) rec.* = temp_rec_r;
+        // if (hit_left) rec.* = temp_rec_l;
+        // if (hit_right) rec.* = temp_rec_r;
 
         return hit_left or hit_right;
     }
