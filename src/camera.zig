@@ -58,17 +58,29 @@ pub const Camera = struct {
         const start_at = context.thread_idx * context.chunk_size;
         const end_before = start_at + context.chunk_size;
 
+        std.debug.print("Start at {d}, end before {d}\n\n", .{ start_at, end_before });
+
+        var totrays: u64 = 0;
+        var hitrays: u64 = 0;
+
         for (1..self.samples_per_pixel + 1) |number_of_samples| {
             for (start_at..end_before) |i| {
+                totrays += 1;
                 const x: u32 = @intCast(@mod(i, self.image_width) + 1);
                 const y: u32 = @intCast(@divTrunc(i, self.image_width) + 1);
 
                 const r = self.getRay(x, y);
                 const ray_color = self.rayColor(r, self.max_depth, context.world);
 
+                // std.debug.print("{}", .{ray_color});
+                if (ray_color[0] != 0 and ray_color[1] != 1 and ray_color[2] != 2) {
+                    hitrays += 1;
+                }
+
                 try self.writer.writeColor(x - 1, y - 1, ray_color, number_of_samples);
             }
         }
+        std.debug.print("Tot: {d}, Hits: {d}\n\n", .{ totrays, hitrays });
     }
 
     // Old render
@@ -197,13 +209,14 @@ pub const Camera = struct {
     }
 
     fn rayColor(self: Camera, r: ray.Ray, depth: u8, world: BvhNode) vec3.Vec3 {
-        var rec = hittable.HitRecord{};
-
         if (depth <= 0) {
             return vec3.zero();
         }
 
-        var ray_t = interval.Interval{ .min = 0.001, .max = 0 };
+        var rec = hittable.HitRecord{};
+
+        var ray_t = interval.Interval{ .min = 0.001, .max = rtweekend.infinity };
+
         if (world.hit(r, &ray_t, &rec)) {
             var scattered = ray.Ray{};
             var attenuation = vec3.zero();

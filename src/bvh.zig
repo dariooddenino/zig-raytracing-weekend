@@ -12,9 +12,23 @@ const HitRecord = hittable.HitRecord;
 const Aabb = aabb.Aabb;
 const Interval = interval.Interval;
 
+// TODO: can I avoid duplicating the last object? Maybe a null terminated pointer
+// TODO: why with one sphere I get two different objects??
+// TODO: why is it not rendering anything?
 pub const BvhInner = union(enum) {
     bvh: BvhNode,
     hittable: Hittable,
+
+    pub fn print(self: BvhInner, i: u32) void {
+        switch (self) {
+            .bvh => |b| {
+                b.print(i);
+            },
+            .hittable => |h| {
+                std.debug.print("HIT [{d}]: {}\n\n", .{ i, h.sphere.center1 });
+            },
+        }
+    }
 
     pub fn boundingBox(self: BvhInner) Aabb {
         switch (self) {
@@ -31,8 +45,20 @@ pub const BvhInner = union(enum) {
 
 pub const BvhNode = struct {
     left: *BvhInner,
-    right: *BvhInner,
+    right: *?BvhInner,
     bounding_box: Aabb = Aabb{},
+
+    pub fn print(self: BvhNode, i: u32) void {
+        std.debug.print("\nNODE [{d}]\n", .{i});
+        std.debug.print("LEFT [{d}]  {}\n", .{ i, @TypeOf(self.left.*) });
+        self.left.print(i + 1);
+        if (self.right.*) |right| {
+            std.debug.print("RIGHT [{d}] {}\n", .{ i, @TypeOf(right) });
+            right.print(i + 1);
+        } else {
+            std.debug.print("NO RIGHT\n", .{});
+        }
+    }
 
     pub fn boundingBox(self: BvhNode) Aabb {
         return self.bounding_box;
@@ -45,18 +71,20 @@ pub const BvhNode = struct {
     pub fn initDet(allocator: std.mem.Allocator, objects: *std.ArrayList(Hittable), start: usize, end: usize) !BvhNode {
         // var objects = src_objects;
         var left: BvhInner = undefined;
-        var right: BvhInner = undefined;
+        var right: ?BvhInner = null;
         var bounding_box: Aabb = undefined;
-
+        std.debug.print("\ninitDet with {d} objects, start {d}, end {d}\n", .{ objects.items.len, start, end });
         const axis = rtweekend.randomIntRange(0, 2);
 
         const object_span = end - start;
+        // @breakpoint();
 
-        // Last object.
         if (object_span == 1) {
+            // Last object.
+            std.debug.print("Getting into span 1\n", .{});
             left = BvhInner{ .hittable = objects.items[start] };
-            right = left;
         } else if (object_span == 2) {
+            std.debug.print("Getting into span 2\n", .{});
             if (comparator(axis, objects.items[start], objects.items[start + 1])) {
                 left = BvhInner{ .hittable = objects.items[start] };
                 right = BvhInner{ .hittable = objects.items[start + 1] };
@@ -65,6 +93,7 @@ pub const BvhNode = struct {
                 right = BvhInner{ .hittable = objects.items[start] };
             }
         } else {
+            std.debug.print("Getting into span 3\n", .{});
             // TODO need to implement this
             // std::sort (objects.begin() + start, objects.begin() + end, comparator);
             // const lobjects = objects.toOwnedSlice();
@@ -78,7 +107,22 @@ pub const BvhNode = struct {
             right = BvhInner{ .bvh = try BvhNode.initDet(allocator, objects, mid, end) };
         }
 
-        bounding_box = Aabb.fromBoxes(left.boundingBox(), right.boundingBox());
+        if (right) |r| {
+            bounding_box = Aabb.fromBoxes(left.boundingBox(), r.boundingBox());
+        } else {
+            bounding_box = left.boundingBox();
+        }
+
+        // @breakpoint();
+        left.print(0);
+        if (right) |r| {
+            r.print(0);
+        } else {
+            std.debug.print("No right\n", .{});
+        }
+
+        std.debug.print("The step bounding box is {}\n", .{bounding_box});
+
         return BvhNode{ .left = &left, .right = &right, .bounding_box = bounding_box };
     }
 
@@ -86,7 +130,10 @@ pub const BvhNode = struct {
         if (!self.boundingBox().hit(r, ray_t)) return false;
 
         const hit_left = self.left.hit(r, ray_t, rec);
-        const hit_right = self.right.hit(r, ray_t, rec);
+        var hit_right = false;
+        if (self.right.*) |right| {
+            hit_right = right.hit(r, ray_t, rec);
+        }
 
         return hit_left or hit_right;
     }
