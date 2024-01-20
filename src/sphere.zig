@@ -18,6 +18,10 @@ pub const Sphere = struct {
     center_vec: Vec3 = vec3.zero(),
     bounding_box: Aabb = Aabb{},
 
+    pub fn boundingBox(self: Sphere) Aabb {
+        return self.bounding_box;
+    }
+
     pub fn init(center1: Vec3, radius: f32, mat: Material) Sphere {
         const rvec = Vec3{ radius, radius, radius };
         return Sphere{ .center1 = center1, .radius = radius, .mat = mat, .bounding_box = Aabb.fromPoints(center1 - rvec, center1 + rvec) };
@@ -36,7 +40,7 @@ pub const Sphere = struct {
         return self.center1 + vec3.splat3(time) * self.center_vec;
     }
 
-    pub fn hit(self: Sphere, r: ray.Ray, ray_t: interval.Interval, rec: *hittable.HitRecord) bool {
+    pub fn hit(self: Sphere, r: ray.Ray, ray_t: *interval.Interval, rec: *hittable.HitRecord) bool {
         const center = if (self.is_moving) self.getCenter(r.time) else self.center1;
         const oc = r.origin - center;
 

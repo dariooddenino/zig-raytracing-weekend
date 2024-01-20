@@ -7,11 +7,13 @@ const hittable = @import("hittable.zig");
 const hittable_list = @import("hittable_list.zig");
 const interval = @import("interval.zig");
 const material = @import("material.zig");
+const bvh = @import("bvh.zig");
 
+const BvhNode = bvh.BvhNode;
 const toFloat = rtweekend.toFloat;
 
 // TODO move these two to their own file
-pub const Task = struct { thread_idx: u32, chunk_size: u32, world: hittable_list.HittableList, camera: *Camera };
+pub const Task = struct { thread_idx: u32, chunk_size: u32, world: BvhNode, camera: *Camera };
 
 pub const SharedStateImageWriter = struct {
     buffer: [][]color.ColorAndSamples,
@@ -194,14 +196,15 @@ pub const Camera = struct {
         return ray.Ray{ .origin = ray_origin, .direction = ray_direction, .time = ray_time };
     }
 
-    fn rayColor(self: Camera, r: ray.Ray, depth: u8, world: anytype) vec3.Vec3 {
+    fn rayColor(self: Camera, r: ray.Ray, depth: u8, world: BvhNode) vec3.Vec3 {
         var rec = hittable.HitRecord{};
 
         if (depth <= 0) {
             return vec3.zero();
         }
 
-        if (world.hit(r, interval.Interval{ .min = 0.001 }, &rec)) {
+        var ray_t = interval.Interval{ .min = 0.001, .max = 0 };
+        if (world.hit(r, &ray_t, &rec)) {
             var scattered = ray.Ray{};
             var attenuation = vec3.zero();
             const mat = rec.mat;

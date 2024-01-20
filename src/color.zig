@@ -34,7 +34,7 @@ pub fn toGamma(pixel_color: ColorAndSamples) vec3.Vec3 {
     g = linearToGamma(g);
     b = linearToGamma(b);
 
-    const intensity = interval.Interval{ .max = 0.999 };
+    const intensity = interval.Interval{ .min = 0, .max = 0.999 };
 
     return vec3.Vec3{ intensity.clamp(r), intensity.clamp(g), intensity.clamp(b) };
 }

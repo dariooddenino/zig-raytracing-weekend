@@ -13,11 +13,13 @@ const c = @cImport({
     @cInclude("SDL2/SDL.h");
 });
 const window = @import("window.zig");
+const bvh = @import("bvh.zig");
 
 const toFloat = rtweekend.toFloat;
 
 const Vec3 = vec3.Vec3;
 const Ray = ray.Ray;
+const BvhNode = bvh.BvhNode;
 const ColorAndSamples = color.ColorAndSamples;
 const Hittable = hittable_list.Hittable;
 const HittableList = hittable_list.HittableList;
@@ -63,7 +65,7 @@ pub fn main() !void {
     defer objects.deinit();
 
     // Generate a random world.
-    const world = try generateWorld(&objects);
+    const world = try generateWorld(objects);
 
     // Initialize camera and render frame.
     var cam = Camera{
@@ -114,7 +116,7 @@ pub fn renderFn(context: Task) !void {
     try context.camera.render(context);
 }
 
-fn generateWorld(objects: *ObjectList) !HittableList {
+fn generateWorld(objects: ObjectList) !BvhNode {
     var world = hittable_list.HittableList{ .objects = objects };
 
     const ground_material = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{ 0.5, 0.5, 0.5 }) };
@@ -161,5 +163,5 @@ fn generateWorld(objects: *ObjectList) !HittableList {
     const material3 = material.Material{ .metal = material.Metal.fromColor(Vec3{ 0.7, 0.6, 0.5 }, 0.1) };
     try world.add(sphere.Sphere{ .center1 = Vec3{ 4, 1, 0 }, .radius = 1.0, .mat = material3 });
 
-    return world;
+    return try BvhNode.init(allocator, &world.objects);
 }

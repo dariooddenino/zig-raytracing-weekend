@@ -21,7 +21,7 @@ pub inline fn randomDoubleRange(min: f32, max: f32) f32 {
 
 // NOTE: not entirely sure about this
 pub inline fn randomIntRange(min: u32, max: u32) u32 {
-    return @round(randomDoubleRange(min, max + 1));
+    return @intFromFloat(@round(randomDoubleRange(min, max + 1)));
 }
 
 // TODO: Do we have property testing in zig?

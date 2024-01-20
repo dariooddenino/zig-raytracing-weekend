@@ -12,36 +12,57 @@ const HitRecord = hittable.HitRecord;
 const Aabb = aabb.Aabb;
 const Interval = interval.Interval;
 
+pub const BvhInner = union(enum) {
+    bvh: BvhNode,
+    hittable: Hittable,
+
+    pub fn boundingBox(self: BvhInner) Aabb {
+        switch (self) {
+            inline else => |o| return o.boundingBox(),
+        }
+    }
+
+    pub fn hit(self: BvhInner, r: Ray, ray_t: *Interval, rec: *HitRecord) bool {
+        switch (self) {
+            inline else => |object| return object.hit(r, ray_t, rec),
+        }
+    }
+};
+
 pub const BvhNode = struct {
-    left: Hittable,
-    right: Hittable,
+    left: *BvhInner,
+    right: *BvhInner,
     bounding_box: Aabb = Aabb{},
 
-    pub fn init(allocator: std.mem.Allocator, src_objects: std.ArrayList(Hittable), start: usize, end: usize) BvhNode {
-        const objects = src_objects;
-        var left = undefined;
-        var right = undefined;
-        var bounding_box = undefined;
+    pub fn boundingBox(self: BvhNode) Aabb {
+        return self.bounding_box;
+    }
+
+    pub fn init(allocator: std.mem.Allocator, objects: *std.ArrayList(Hittable)) !BvhNode {
+        return try BvhNode.initDet(allocator, objects, 0, objects.items.len);
+    }
+
+    pub fn initDet(allocator: std.mem.Allocator, objects: *std.ArrayList(Hittable), start: usize, end: usize) !BvhNode {
+        // var objects = src_objects;
+        var left: BvhInner = undefined;
+        var right: BvhInner = undefined;
+        var bounding_box: Aabb = undefined;
 
         const axis = rtweekend.randomIntRange(0, 2);
-        const comparator = if (axis == 0) {
-            BvhNode.box_x_compare;
-        } else if (axis == 1) {
-            BvhNode.box_y_compare;
-        } else BvhNode.box_z_compare;
 
         const object_span = end - start;
 
+        // Last object.
         if (object_span == 1) {
-            left = objects.items[start];
-            right = objects.items[start];
+            left = BvhInner{ .hittable = objects.items[start] };
+            right = left;
         } else if (object_span == 2) {
-            if (comparator(objects.items[start], objects.items[start + 1])) {
-                left = objects.items[start];
-                right = objects.items[start + 1];
+            if (comparator(axis, objects.items[start], objects.items[start + 1])) {
+                left = BvhInner{ .hittable = objects.items[start] };
+                right = BvhInner{ .hittable = objects.items[start + 1] };
             } else {
-                left = objects.items[start + 1];
-                right = objects.items[start];
+                left = BvhInner{ .hittable = objects.items[start + 1] };
+                right = BvhInner{ .hittable = objects.items[start] };
             }
         } else {
             // TODO need to implement this
@@ -49,20 +70,20 @@ pub const BvhNode = struct {
             // const lobjects = objects.toOwnedSlice();
             // std.sort.sort(Hittable, lobjects, {}, comparator);
             const objects_slice = try objects.toOwnedSlice();
-            std.sort.pdq(Hittable, objects_slice[start..end], {}, comparator);
-            objects = std.ArrayList(Hittable).fromOwnedSlice(allocator, objects_slice);
+            std.sort.pdq(Hittable, objects_slice[start..end], axis, comparator);
+            objects.* = std.ArrayList(Hittable).fromOwnedSlice(allocator, objects_slice);
 
             const mid = start + object_span / 2;
-            left = BvhNode.init(objects, start, mid);
-            right = BvhNode.init(objects, mid, end);
+            left = BvhInner{ .bvh = try BvhNode.initDet(allocator, objects, start, mid) };
+            right = BvhInner{ .bvh = try BvhNode.initDet(allocator, objects, mid, end) };
         }
 
-        bounding_box = Aabb.fromBoxes(left.bounding_box, right.boudning_box);
-        return BvhNode{ .left = left, .right = right, .bounding_box = bounding_box };
+        bounding_box = Aabb.fromBoxes(left.boundingBox(), right.boundingBox());
+        return BvhNode{ .left = &left, .right = &right, .bounding_box = bounding_box };
     }
 
-    pub fn hit(self: BvhNode, r: Ray, ray_t: Interval, rec: *HitRecord) bool {
-        if (!self.bounding_box.hit(r, ray_t)) return false;
+    pub fn hit(self: BvhNode, r: Ray, ray_t: *Interval, rec: *HitRecord) bool {
+        if (!self.boundingBox().hit(r, ray_t)) return false;
 
         const hit_left = self.left.hit(r, ray_t, rec);
         const hit_right = self.right.hit(r, ray_t, rec);
@@ -71,57 +92,16 @@ pub const BvhNode = struct {
     }
 
     fn box_compare(a: Hittable, b: Hittable, axis_index: u32) bool {
-        return a.bounding_box.axis(axis_index).min < b.bounding_box.axis(axis_index).min;
+        return a.boundingBox().axis(axis_index).min < b.boundingBox().axis(axis_index).min;
     }
 
-    fn box_x_compare(context: void, a: Hittable, b: Hittable) bool {
-        _ = context;
-        return box_compare(a, b, 0);
-    }
-
-    fn box_y_compare(context: void, a: Hittable, b: Hittable) bool {
-        _ = context;
-        return box_compare(a, b, 1);
-    }
-
-    fn box_z_compare(context: void, a: Hittable, b: Hittable) bool {
-        _ = context;
-        return box_compare(a, b, 2);
+    fn comparator(axis: u32, a: Hittable, b: Hittable) bool {
+        if (axis == 0) {
+            return box_compare(a, b, 0);
+        } else if (axis == 1) {
+            return box_compare(a, b, 1);
+        } else {
+            return box_compare(a, b, 2);
+        }
     }
 };
-
-const Foo = struct { val: u32 };
-
-fn cmpFoo(context: void, a: Foo, b: Foo) bool {
-    _ = context;
-    if (a.val < b.val) {
-        return true;
-    } else {
-        return false;
-    }
-}
-
-// test "sort ArrayList" {
-//     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-//     defer arena.deinit();
-//     const allocator = arena.allocator();
-
-//     var foos = std.ArrayList(Foo).init(allocator);
-//     // defer foos.deinit();
-
-//     try foos.append(Foo{ .val = 5 });
-//     try foos.append(Foo{ .val = 3 });
-//     try foos.append(Foo{ .val = 1 });
-//     try foos.append(Foo{ .val = 2 });
-//     try foos.append(Foo{ .val = 4 });
-
-//     const x = try foos.toOwnedSlice();
-
-//     std.sort.pdq(Foo, x[0..3], {}, cmpFoo);
-
-//     foos = std.ArrayList(Foo).fromOwnedSlice(allocator, x);
-
-//     std.debug.print("{any}\n\n", .{foos});
-
-//     try std.testing.expect(true);
-// }

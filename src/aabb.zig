@@ -8,9 +8,9 @@ const Vec3 = vec3.Vec3;
 const Ray = ray.Ray;
 
 pub const Aabb = struct {
-    x: Interval = Interval{},
-    y: Interval = Interval{},
-    z: Interval = Interval{},
+    x: Interval = Interval{ .min = 0, .max = 0 },
+    y: Interval = Interval{ .min = 0, .max = 0 },
+    z: Interval = Interval{ .min = 0, .max = 0 },
 
     pub fn fromPoints(a: Vec3, b: Vec3) Aabb {
         // Treat the two points a and b as extrema for the bounding box, so we don't require a
@@ -41,12 +41,15 @@ pub const Aabb = struct {
             const invD = 1 / r.direction[a];
             const orig = r.origin[a];
 
-            const t0: f32 = (self.axis[a].min - orig) * invD;
-            const t1: f32 = (self.axis[a].max - orig) * invD;
+            var t0: f32 = (self.axis(@intCast(a)).min - orig) * invD;
+            var t1: f32 = (self.axis(@intCast(a)).max - orig) * invD;
 
-            // NOTE: not sure if this is what I should use here for c++ std::swap
-            if (invD < 0)
-                std.mem.swap(f32, t0, t1);
+            if (invD < 0) {
+                const temp = t1;
+                t1 = t0;
+                t0 = temp;
+            }
+            // std.mem.swap(f32, t0, t1);
 
             if (t0 > ray_t.min) ray_t.min = t0;
             if (t1 < ray_t.max) ray_t.max = t1;
