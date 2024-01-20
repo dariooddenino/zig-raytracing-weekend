@@ -72,8 +72,13 @@ pub const Camera = struct {
                 const r = self.getRay(x, y);
                 const ray_color = self.rayColor(r, self.max_depth, context.world);
 
+                // if (i == 0 and number_of_samples == 1) {
+                //     std.debug.print("ray {}\n", .{r});
+                //     std.debug.print("ray_color {}\n", .{ray_color});
+                // }
+
                 // std.debug.print("{}", .{ray_color});
-                if (ray_color[0] != 0 and ray_color[1] != 1 and ray_color[2] != 2) {
+                if (@abs(ray_color[0]) > 0.01 and @abs(ray_color[1]) > 0.01 and @abs(ray_color[2]) > 0.01) {
                     hitrays += 1;
                 }
 
@@ -195,8 +200,6 @@ pub const Camera = struct {
 
     fn getRay(self: Camera, i: u32, j: u32) ray.Ray {
         // Get a randomly sampled camera ray for the pixel at location i,j, originating from the camera defocus disk.
-        // const pixel_center = vec3.add(self.pixel00_loc, vec3.add(vec3.mul(toFloat(i), self.pixel_delta_u), vec3.mul(toFloat(j), self.pixel_delta_v)));
-        // const pixel_sample = vec3.add(pixel_center, self.pixelSampleSquare());
 
         const pixel_center = self.pixel00_loc + self.pixel_delta_u * vec3.splat3(toFloat(i)) + self.pixel_delta_v * vec3.splat3(toFloat(j));
         const pixel_sample = pixel_center + self.pixelSampleSquare();
@@ -218,18 +221,33 @@ pub const Camera = struct {
         var ray_t = interval.Interval{ .min = 0.001, .max = rtweekend.infinity };
 
         if (world.hit(r, &ray_t, &rec)) {
+            // if (depth >= self.max_depth - 20) {
+            //     std.debug.print("\n[H] ", .{});
+            // }
+
             var scattered = ray.Ray{};
             var attenuation = vec3.zero();
             const mat = rec.mat;
-            if (mat.scatter(r, rec, &attenuation, &scattered))
+            if (mat.scatter(r, rec, &attenuation, &scattered)) {
+                // if (depth == self.max_depth) {
+                //     std.debug.print("[S] \n", .{});
+                // }
                 return attenuation * rayColor(self, scattered, depth - 1, world);
-
+            }
+            // if (depth == self.max_depth) {
+            //     std.debug.print("[B] \n", .{});
+            // }
             return vec3.zero();
         }
 
-        const unit_direction = vec3.unitVector(r.direction);
-        const a: f32 = 0.5 * (unit_direction[1] + 1.0);
-        return vec3.Vec3{ 1, 1, 1 } * vec3.splat3(1.0 - a) + vec3.Vec3{ 0.5, 0.7, 1.0 } * vec3.splat3(a);
+        // if (depth == self.max_depth) {
+        //     std.debug.print("[M] \n", .{});
+        // }
+        return vec3.zero();
+        // NOTE: this was giving me a flat white now?
+        // const unit_direction = vec3.unitVector(r.direction);
+        // const a: f32 = 0.5 * (unit_direction[1] + 1.0);
+        // return vec3.splat3(1.0 - a) + vec3.Vec3{ 0.5, 0.7, 1.0 } * vec3.splat3(a);
     }
 };
 

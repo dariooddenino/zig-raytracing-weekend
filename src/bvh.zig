@@ -5,16 +5,17 @@ const ray = @import("ray.zig");
 const interval = @import("interval.zig");
 const hittable = @import("hittable.zig");
 const rtweekend = @import("rtweekend.zig");
+const material = @import("material.zig");
+const vec3 = @import("vec3.zig");
+const sphere = @import("sphere.zig");
 
+const Vec3 = vec3.Vec3;
 const Ray = ray.Ray;
 const Hittable = hittable_list.Hittable;
 const HitRecord = hittable.HitRecord;
 const Aabb = aabb.Aabb;
 const Interval = interval.Interval;
 
-// TODO: can I avoid duplicating the last object? Maybe a null terminated pointer
-// TODO: why with one sphere I get two different objects??
-// TODO: why is it not rendering anything?
 pub const BvhInner = union(enum) {
     bvh: BvhNode,
     hittable: Hittable,
@@ -50,14 +51,33 @@ pub const BvhNode = struct {
 
     pub fn print(self: BvhNode, i: u32) void {
         std.debug.print("\nNODE [{d}]\n", .{i});
-        std.debug.print("LEFT [{d}]  {}\n", .{ i, @TypeOf(self.left.*) });
+        std.debug.print("LEFT [{d}]  {}\n", .{ i, self.left.* });
         self.left.print(i + 1);
         if (self.right.*) |right| {
-            std.debug.print("RIGHT [{d}] {}\n", .{ i, @TypeOf(right) });
+            std.debug.print("RIGHT [{d}] {}\n", .{ i, right });
             right.print(i + 1);
         } else {
             std.debug.print("NO RIGHT\n", .{});
         }
+    }
+
+    pub fn length(self: BvhNode) u32 {
+        var left_length: u32 = 0;
+        var right_length: u32 = 0;
+
+        switch (self.left.*) {
+            .hittable => |_| left_length += 1,
+            .bvh => |n| left_length += n.length(),
+        }
+
+        if (self.right.*) |r| {
+            switch (r) {
+                .hittable => |_| right_length += 1,
+                .bvh => |n| right_length += n.length(),
+            }
+        }
+
+        return left_length + right_length;
     }
 
     pub fn boundingBox(self: BvhNode) Aabb {
@@ -83,6 +103,7 @@ pub const BvhNode = struct {
             // Last object.
             std.debug.print("Getting into span 1\n", .{});
             left = BvhInner{ .hittable = objects.items[start] };
+            right = null;
         } else if (object_span == 2) {
             std.debug.print("Getting into span 2\n", .{});
             if (comparator(axis, objects.items[start], objects.items[start + 1])) {
@@ -114,14 +135,14 @@ pub const BvhNode = struct {
         }
 
         // @breakpoint();
-        left.print(0);
-        if (right) |r| {
-            r.print(0);
-        } else {
-            std.debug.print("No right\n", .{});
-        }
+        // left.print(0);
+        // if (right) |r| {
+        //     r.print(0);
+        // } else {
+        //     std.debug.print("No right\n", .{});
+        // }
 
-        std.debug.print("The step bounding box is {}\n", .{bounding_box});
+        // std.debug.print("The step bounding box is {}\n", .{bounding_box});
 
         return BvhNode{ .left = &left, .right = &right, .bounding_box = bounding_box };
     }
@@ -152,3 +173,64 @@ pub const BvhNode = struct {
         }
     }
 };
+
+test "bounding box" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var arena = std.heap.ArenaAllocator.init(gpa.allocator());
+    const allocator = arena.allocator();
+    defer arena.deinit();
+
+    var objects = std.ArrayList(Hittable).init(allocator);
+    defer objects.deinit();
+
+    var world = hittable_list.HittableList{ .objects = objects };
+
+    const ground_material = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{ 0.5, 0.5, 0.5 }) };
+    const ground = sphere.Sphere.init(vec3.Vec3{ 0, -1000, -1 }, 1000, ground_material);
+    try world.add(ground);
+
+    const material2 = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{ 0.4, 0.2, 0.1 }) };
+    try world.add(sphere.Sphere.init(vec3.Vec3{ 0, 0, 0 }, 1.0, material2));
+
+    const node = try BvhNode.init(allocator, &world.objects);
+
+    const r = Ray{ .origin = vec3.Vec3{ 1, 1, 1 }, .direction = vec3.Vec3{ -1, -1, -1 } };
+    var ray_t = interval.Interval{ .min = 0.001, .max = rtweekend.infinity };
+    var rec = hittable.HitRecord{};
+
+    const hit = node.hit(r, &ray_t, &rec);
+
+    try std.testing.expect(hit);
+
+    const r2 = Ray{ .origin = vec3.Vec3{ 1, 1, 1 }, .direction = vec3.Vec3{ 1, 1, 1 } };
+    var ray_t2 = interval.Interval{ .min = 0.001, .max = rtweekend.infinity };
+    var rec2 = hittable.HitRecord{};
+
+    const hit2 = node.hit(r2, &ray_t2, &rec2);
+
+    try std.testing.expect(!hit2);
+}
+
+test "tree generation" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var arena = std.heap.ArenaAllocator.init(gpa.allocator());
+    const allocator = arena.allocator();
+    defer arena.deinit();
+
+    var objects = std.ArrayList(Hittable).init(allocator);
+    defer objects.deinit();
+
+    var world = hittable_list.HittableList{ .objects = objects };
+    const material1 = material.Material{ .dielectric = material.Dielectric{ .ir = 1.5 } };
+    try world.add(sphere.Sphere.init(Vec3{ 0, 1, 0 }, 1.0, material1));
+
+    const material2 = material.Material{ .lambertian = material.Lambertian.fromColor(Vec3{ 0.4, 0.2, 0.1 }) };
+    try world.add(sphere.Sphere.init(Vec3{ -4, 1, 0 }, 1.0, material2));
+
+    const material3 = material.Material{ .metal = material.Metal.fromColor(Vec3{ 0.7, 0.6, 0.5 }, 0.1) };
+    try world.add(sphere.Sphere.init(Vec3{ 4, 1, 0 }, 1.0, material3));
+
+    const node = try BvhNode.init(allocator, &world.objects);
+
+    try std.testing.expectEqual(3, node.length());
+}

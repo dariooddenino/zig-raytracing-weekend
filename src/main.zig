@@ -66,7 +66,7 @@ pub fn main() !void {
 
     // Generate a random world.
     const world = try generateWorld(objects);
-    // world.print(0);
+    world.print(0);
 
     // Initialize camera and render frame.
     var cam = Camera{
@@ -120,9 +120,10 @@ pub fn renderFn(context: Task) !void {
 fn generateWorld(objects: ObjectList) !BvhNode {
     var world = hittable_list.HittableList{ .objects = objects };
 
-    const ground_material = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{ 0.5, 0.5, 0.5 }) };
-    const ground = sphere.Sphere.init(vec3.Vec3{ 0, -1000, -1 }, 1000, ground_material);
-    try world.add(ground);
+    // NOTE: I get a crash by enabling this
+    // const ground_material = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{ 0.5, 0.5, 0.5 }) };
+    // const ground = sphere.Sphere.init(vec3.Vec3{ 0, -1000, -1 }, 1000, ground_material);
+    // try world.add(ground);
 
     // var a: f32 = -11;
     // while (a < 11) : (a += 1) {
@@ -157,13 +158,14 @@ fn generateWorld(objects: ObjectList) !BvhNode {
     //     }
     // }
 
-    // const material1 = material.Material{ .dielectric = material.Dielectric{ .ir = 1.5 } };
-    // try world.add(sphere.Sphere{ .center1 = Vec3{ 0, 1, 0 }, .radius = 1.0, .mat = material1 });
+    const material1 = material.Material{ .dielectric = material.Dielectric{ .ir = 1.5 } };
+    try world.add(sphere.Sphere.init(Vec3{ 0, 1, 0 }, 1.0, material1));
+
     const material2 = material.Material{ .lambertian = material.Lambertian.fromColor(Vec3{ 0.4, 0.2, 0.1 }) };
     try world.add(sphere.Sphere.init(Vec3{ -4, 1, 0 }, 1.0, material2));
-    // try world.add(sphere.Sphere{ .center1 = Vec3{ -4, 1, 0 }, .radius = 1.0, .mat = material2 });
-    // const material3 = material.Material{ .metal = material.Metal.fromColor(Vec3{ 0.7, 0.6, 0.5 }, 0.1) };
-    // try world.add(sphere.Sphere{ .center1 = Vec3{ 4, 1, 0 }, .radius = 1.0, .mat = material3 });
+
+    const material3 = material.Material{ .metal = material.Metal.fromColor(Vec3{ 0.7, 0.6, 0.5 }, 0.1) };
+    try world.add(sphere.Sphere.init(Vec3{ 4, 1, 0 }, 1.0, material3));
 
     return try BvhNode.init(allocator, &world.objects);
 }
