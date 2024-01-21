@@ -41,7 +41,7 @@ const ObjectList = std.ArrayList(Hittable);
 // TODO does it know when it's done?
 // TODO cleanup unused code
 
-const image_width: u32 = 400;
+const image_width: u32 = 800;
 const aspect_ratio = 16.0 / 9.0;
 const image_height: u32 = @intFromFloat(@round(toFloat(image_width) / aspect_ratio));
 const number_of_threads = 8;
@@ -79,7 +79,7 @@ pub fn main() !void {
         .aspect_ratio = aspect_ratio,
         .image_width = image_width,
         .image_height = image_height,
-        .samples_per_pixel = 200,
+        .samples_per_pixel = 500,
         .max_depth = 16,
         .vfov = 20,
         .lookfrom = Vec3{ 13, 2, 3 },
@@ -130,38 +130,38 @@ fn generateWorld(objects: *ObjectList) !Hittable {
     const ground = Sphere.init(vec3.Vec3{ 0, -1000, -1 }, 1000, ground_material);
     try objects.append(ground);
 
-    // var a: f32 = -11;
-    // while (a < 11) : (a += 1) {
-    //     var b: f32 = -11;
-    //     while (b < 11) : (b += 1) {
-    //         const choose_mat = rtweekend.randomDouble();
-    //         const center = Vec3{ a + 0.9 * rtweekend.randomDouble(), 0.2, b + 0.9 * rtweekend.randomDouble() };
+    var a: f32 = -11;
+    while (a < 11) : (a += 1) {
+        var b: f32 = -11;
+        while (b < 11) : (b += 1) {
+            const choose_mat = rtweekend.randomDouble();
+            const center = Vec3{ a + 0.9 * rtweekend.randomDouble(), 0.2, b + 0.9 * rtweekend.randomDouble() };
 
-    //         if (vec3.length(center - Vec3{ 4, 0.2, 0 }) > 0.9) {
-    //             // TODO: this was a shared_ptr, not entirely sure why and how to replicate.
-    //             // var sphere_material = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{}) };
+            if (vec3.length(center - Vec3{ 4, 0.2, 0 }) > 0.9) {
+                // TODO: this was a shared_ptr, not entirely sure why and how to replicate.
+                // var sphere_material = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{}) };
 
-    //             if (choose_mat < 0.8) {
-    //                 // diffuse
-    //                 const albedo = vec3.random() * vec3.random();
-    //                 const sphere_material = material.Material{ .lambertian = material.Lambertian.fromColor(albedo) };
-    //                 const center2 = center + Vec3{ 0, rtweekend.randomDoubleRange(0, 0.5), 0 };
-    //                 const spherei = sphere.Sphere.initMoving(center, center2, 0.2, sphere_material);
-    //                 try world.add(spherei);
-    //             } else if (choose_mat < 0.95) {
-    //                 // metal
-    //                 const albedo = vec3.randomRange(0.5, 1);
-    //                 const fuzz = rtweekend.randomDoubleRange(0, 0.5);
-    //                 const sphere_material = material.Material{ .metal = material.Metal.fromColor(albedo, fuzz) };
-    //                 try world.add(sphere.Sphere{ .center1 = center, .radius = 0.2, .mat = sphere_material });
-    //             } else {
-    //                 // glass
-    //                 const sphere_material = material.Material{ .dielectric = material.Dielectric{ .ir = 1.5 } };
-    //                 try world.add(sphere.Sphere{ .center1 = center, .radius = 0.2, .mat = sphere_material });
-    //             }
-    //         }
-    //     }
-    // }
+                if (choose_mat < 0.8) {
+                    // diffuse
+                    const albedo = vec3.random() * vec3.random();
+                    const sphere_material = material.Material{ .lambertian = material.Lambertian.fromColor(albedo) };
+                    const center2 = center + Vec3{ 0, rtweekend.randomDoubleRange(0, 0.5), 0 };
+                    const spherei = Sphere.initMoving(center, center2, 0.2, sphere_material);
+                    try objects.append(spherei);
+                } else if (choose_mat < 0.95) {
+                    // metal
+                    const albedo = vec3.randomRange(0.5, 1);
+                    const fuzz = rtweekend.randomDoubleRange(0, 0.5);
+                    const sphere_material = material.Material{ .metal = material.Metal.fromColor(albedo, fuzz) };
+                    try objects.append(Sphere.init(center, 0.2, sphere_material));
+                } else {
+                    // glass
+                    const sphere_material = material.Material{ .dielectric = material.Dielectric{ .ir = 1.5 } };
+                    try objects.append(Sphere.init(center, 0.2, sphere_material));
+                }
+            }
+        }
+    }
 
     const material1 = Material{ .dielectric = material.Dielectric{ .ir = 1.5 } };
     try objects.append(Sphere.init(Vec3{ 0, 1, 0 }, 1.0, material1));
