@@ -9,11 +9,23 @@ const sphere = @import("sphere.zig");
 const interval = @import("interval.zig");
 const camera = @import("camera.zig");
 const material = @import("material.zig");
-const c = @cImport({
-    @cInclude("SDL2/SDL.h");
-});
-const window = @import("window.zig");
+const builtin = @import("builtin");
+const c = switch (builtin.os.tag) {
+    .linux => @cImport({
+        @cInclude("SDL2/SDL.h");
+    }),
+    inline else => undefined,
+};
+// const c = @cImport({
+//     @cInclude("SDL2/SDL.h");
+// });
+const window = switch (builtin.os.tag) {
+    .linux => @import("window.zig"),
+    inline else => undefined,
+};
+// const window = @import("window.zig");
 const bvh = @import("bvh.zig");
+const printPpmToStdout = @import("stdout.zig").printPpmToStdout;
 
 const toFloat = rtweekend.toFloat;
 
@@ -39,7 +51,6 @@ const ObjectList = std.ArrayList(Hittable);
 // TODO optionally output to a path on quit
 // TODO load scene from file
 // TODO does it know when it's done?
-// TODO cleanup unused code
 
 const image_width: u32 = 800;
 const aspect_ratio = 16.0 / 9.0;
@@ -71,15 +82,12 @@ pub fn main() !void {
     // Generate a random world.
     const world = try generateWorld(&objects);
 
-    // std.debug.print("World bounding box: {}\n", .{world.bounding_box});
-    // std.debug.print("World elemenets: {d}\n", .{world.count()});
-
     // Initialize camera and render frame.
     var cam = Camera{
         .aspect_ratio = aspect_ratio,
         .image_width = image_width,
         .image_height = image_height,
-        .samples_per_pixel = 500,
+        .samples_per_pixel = 800,
         .max_depth = 16,
         .vfov = 20,
         .lookfrom = Vec3{ 13, 2, 3 },
@@ -102,23 +110,15 @@ pub fn main() !void {
         try threads.append(thread);
     }
 
-    try window.initialize(image_width, image_height, image_buffer);
+    if (builtin.os.tag == .linux) {
+        try window.initialize(image_width, image_height, image_buffer);
+    }
 
     for (threads.items) |thread| {
         thread.join();
     }
 
-    //// OLD CODE BELOW
-
-    // stdout is for the actual output of your application, for example if you
-    // are implementing gzip, then only the compressed bytes should be sent to
-    // stdout, not any debugging messages.
-    // const stdout_file = std.io.getStdOut().writer();
-    // var bw = std.io.bufferedWriter(stdout_file);
-    // const stdout = bw.writer();
-    // try cam.render(stdout, world, true);
-
-    // try bw.flush();
+    // try printPpmToStdout(image_buffer);
 }
 
 pub fn renderFn(context: Task) !void {
@@ -172,7 +172,6 @@ fn generateWorld(objects: *ObjectList) !Hittable {
     const material3 = Material{ .metal = material.Metal.fromColor(Vec3{ 0.7, 0.6, 0.5 }, 0.1) };
     try objects.append(Sphere.init(Vec3{ 4, 1, 0 }, 1.0, material3));
 
-    // return try BvhNode.init(allocator, &world.objects);
     const tree = try BVHTree.init(allocator, objects.items, 0, objects.items.len);
 
     return Hittable{ .tree = tree };
