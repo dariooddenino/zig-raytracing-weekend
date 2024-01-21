@@ -9,21 +9,11 @@ const sphere = @import("sphere.zig");
 const interval = @import("interval.zig");
 const camera = @import("camera.zig");
 const material = @import("material.zig");
-const builtin = @import("builtin");
-const c = switch (builtin.os.tag) {
-    .linux => @cImport({
-        @cInclude("SDL2/SDL.h");
-    }),
-    inline else => undefined,
-};
-// const c = @cImport({
-//     @cInclude("SDL2/SDL.h");
-// });
-const window = switch (builtin.os.tag) {
-    .linux => @import("window.zig"),
-    inline else => undefined,
-};
-// const window = @import("window.zig");
+const c = @cImport({
+    @cInclude("SDL2/SDL.h");
+});
+
+const window = @import("window.zig");
 const bvh = @import("bvh.zig");
 const printPpmToStdout = @import("stdout.zig").printPpmToStdout;
 
@@ -110,9 +100,9 @@ pub fn main() !void {
         try threads.append(thread);
     }
 
-    if (builtin.os.tag == .linux) {
-        try window.initialize(image_width, image_height, image_buffer);
-    }
+    // if (builtin.os.tag == .linux) {
+    try window.initialize(image_width, image_height, image_buffer);
+    // }
 
     for (threads.items) |thread| {
         thread.join();

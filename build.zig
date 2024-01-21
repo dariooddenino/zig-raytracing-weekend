@@ -36,9 +36,17 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
 
-    // Add the SDL Package.
-    exe.linkSystemLibrary("SDL2");
-    exe.linkLibC();
+    if (target.result.os.tag == .linux) {
+        // Add the SDL Package.
+        exe.linkSystemLibrary("SDL2");
+        exe.linkLibC();
+    } else {
+        const sdl_dep = b.dependency("sdl", .{
+            .optimize = optimize,
+            .target = target,
+        });
+        exe.linkLibrary(sdl_dep.artifact("SDL2"));
+    }
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
@@ -92,20 +100,4 @@ pub fn build(b: *std.Build) !void {
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_unit_tests.step);
     test_step.dependOn(&run_exe_unit_tests.step);
-
-    const targets: []const std.Target.Query = &.{
-        .{ .cpu_arch = .x86_64, .os_tag = .windows },
-    };
-
-    for (targets) |t| {
-        const release_exe = b.addExecutable(.{
-            .name = "raytrace",
-            .root_source_file = .{ .path = "src/main.zig" },
-            .target = b.resolveTargetQuery(t),
-            .optimize = optimize,
-        });
-        const target_output = b.addInstallArtifact(release_exe, .{ .dest_dir = .{ .override = .{ .custom = try t.zigTriple(b.allocator) } } });
-
-        b.getInstallStep().dependOn(&target_output.step);
-    }
 }
