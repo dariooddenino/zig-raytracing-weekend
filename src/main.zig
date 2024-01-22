@@ -90,29 +90,31 @@ pub fn main() !void {
 
     try cam.initialize();
 
+    var running = true;
     var threads = std.ArrayList(std.Thread).init(allocator);
 
     for (0..number_of_threads) |thread_idx| {
         const task = Task{ .thread_idx = @intCast(thread_idx), .chunk_size = (image_width * image_height) / number_of_threads, .world = world, .camera = &cam };
 
-        const thread = try std.Thread.spawn(.{ .allocator = allocator }, renderFn, .{task});
+        const thread = try std.Thread.spawn(.{ .allocator = allocator }, renderFn, .{ task, &running });
 
         try threads.append(thread);
     }
 
-    // if (builtin.os.tag == .linux) {
-    try window.initialize(image_width, image_height, image_buffer);
-    // }
+    try window.initialize(cam, image_buffer, &running);
 
+    // NOTE I have to read this: https://zig.news/kprotty/resource-efficient-thread-pools-with-zig-3291
     for (threads.items) |thread| {
         thread.join();
     }
 
-    // try printPpmToStdout(image_buffer);
+    // TODO write to file directly instead of stdout.
+    // This put the help text too into the file.
+    try printPpmToStdout(image_buffer);
 }
 
-pub fn renderFn(context: Task) !void {
-    try context.camera.render(context);
+pub fn renderFn(context: Task, running: *bool) !void {
+    try context.camera.render(context, running);
 }
 
 fn generateWorld(objects: *ObjectList) !Hittable {

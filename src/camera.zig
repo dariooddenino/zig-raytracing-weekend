@@ -52,7 +52,7 @@ pub const Camera = struct {
     defocus_disk_v: vec3.Vec3 = vec3.zero(),
     writer: SharedStateImageWriter = undefined,
 
-    pub fn render(self: *Camera, context: Task) std.fs.File.Writer.Error!void {
+    pub fn render(self: *Camera, context: Task, running: *bool) std.fs.File.Writer.Error!void {
         const start_at = context.thread_idx * context.chunk_size;
         const end_before = start_at + context.chunk_size;
 
@@ -65,6 +65,9 @@ pub const Camera = struct {
                 const ray_color = self.rayColor(r, self.max_depth, context.world);
 
                 try self.writer.writeColor(x - 1, y - 1, ray_color, number_of_samples);
+                if (!running.*) {
+                    return;
+                }
             }
         }
     }
