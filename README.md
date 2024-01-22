@@ -1,9 +1,12 @@
 # TODO
 
 - [X] Part 1
-- [ ] SDL
+- [X] SDL
+- [X] Multithreading
+- [X] Cross compiling
 - [ ] Load scene file
-- [ ] Random pixel render
-- [ ] Multicore
+- [ ] Progress indicator
+- [ ] Output selector
+- [ ] Stop (pause?) render
 - [ ] Part 2
 - [ ] Part 3
