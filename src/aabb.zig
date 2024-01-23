@@ -86,8 +86,8 @@ pub const Aabb = struct {
             // std.debug.print("T0 {d} T1 {d}\n", .{ t0, t1 });
             // std.debug.print("PRE ray_t {}\n", .{ray_t});
 
-            if (t0 > ray_t.min) ray_t_min = t0;
-            if (t1 < ray_t.max) ray_t_max = t1;
+            if (t0 > ray_t_min) ray_t_min = t0;
+            if (t1 < ray_t_max) ray_t_max = t1;
 
             // std.debug.print("POST ray_t {}\n", .{ray_t});
 
