@@ -4,6 +4,7 @@ const zglfw = @import("zglfw");
 const zgpu = @import("zgpu");
 const zpool = @import("zpool");
 const zstbi = @import("zstbi");
+const zmath = @import("zmath");
 
 const content_dir = "content/";
 
@@ -32,23 +33,33 @@ pub fn build(b: *std.Build) !void {
     const zgui_pkg = zgui.package(b, target, optimize, .{
         .options = .{ .backend = .glfw_wgpu },
     });
-
-    zgui_pkg.link(exe);
-
+    // const zgui_pkg = zgui.package(b, target, optimize, .{});
+    const zmath_pkg = zmath.package(b, target, optimize, .{});
     const zglfw_pkg = zglfw.package(b, target, optimize, .{});
+    // const zgpu_pkg = zgpu.package(b, target, optimize, .{});
     const zpool_pkg = zpool.package(b, target, optimize, .{});
     const zstbi_pkg = zstbi.package(b, target, optimize, .{});
     const zgpu_pkg = zgpu.package(b, target, optimize, .{
         .deps = .{ .zpool = zpool_pkg, .zglfw = zglfw_pkg },
     });
 
+    zgui_pkg.link(exe);
     zgpu_pkg.link(exe);
     zglfw_pkg.link(exe);
     zstbi_pkg.link(exe);
+    zmath_pkg.link(exe);
+    zpool_pkg.link(exe);
 
     const exe_options = b.addOptions();
     exe.root_module.addOptions("build_options", exe_options);
     exe_options.addOption([]const u8, "content_dir", content_dir);
+
+    const install_content_step = b.addInstallDirectory(.{
+        .source_dir = .{ .path = thisDir() ++ "/" ++ content_dir },
+        .install_dir = .{ .custom = "" },
+        .install_subdir = "bin/" ++ content_dir,
+    });
+    exe.step.dependOn(&install_content_step.step);
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
@@ -93,4 +104,8 @@ pub fn build(b: *std.Build) !void {
     // running the unit tests.
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_exe_unit_tests.step);
+}
+
+inline fn thisDir() []const u8 {
+    return comptime std.fs.path.dirname(@src().file) orelse ".";
 }
