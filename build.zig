@@ -1,8 +1,8 @@
 const std = @import("std");
-const zgui = @import("libs/zgui/build.zig");
-const zglfw = @import("libs/zglfw/build.zig");
-const zgpu = @import("libs/zgpu/build.zig");
-const zpool = @import("libs/zpool/build.zig");
+const zgui = @import("zgui");
+const zglfw = @import("zglfw");
+const zgpu = @import("zgpu");
+const zpool = @import("zpool");
 
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
@@ -35,7 +35,7 @@ pub fn build(b: *std.Build) !void {
     const zglfw_pkg = zglfw.package(b, target, optimize, .{});
     const zpool_pkg = zpool.package(b, target, optimize, .{});
     const zgpu_pkg = zgpu.package(b, target, optimize, .{
-        .deps = .{ .zpool = zpool_pkg.zpool, .zglfw = zglfw_pkg.zglfw },
+        .deps = .{ .zpool = zpool_pkg, .zglfw = zglfw_pkg },
     });
 
     zgpu_pkg.link(exe);
