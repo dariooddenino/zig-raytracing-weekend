@@ -3,6 +3,9 @@ const zgui = @import("zgui");
 const zglfw = @import("zglfw");
 const zgpu = @import("zgpu");
 const zpool = @import("zpool");
+const zstbi = @import("zstbi");
+
+const content_dir = "content/";
 
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
@@ -34,12 +37,18 @@ pub fn build(b: *std.Build) !void {
 
     const zglfw_pkg = zglfw.package(b, target, optimize, .{});
     const zpool_pkg = zpool.package(b, target, optimize, .{});
+    const zstbi_pkg = zstbi.package(b, target, optimize, .{});
     const zgpu_pkg = zgpu.package(b, target, optimize, .{
         .deps = .{ .zpool = zpool_pkg, .zglfw = zglfw_pkg },
     });
 
     zgpu_pkg.link(exe);
     zglfw_pkg.link(exe);
+    zstbi_pkg.link(exe);
+
+    const exe_options = b.addOptions();
+    exe.root_module.addOptions("build_options", exe_options);
+    exe_options.addOption([]const u8, "content_dir", content_dir);
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default

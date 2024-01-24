@@ -4,12 +4,17 @@ const zglfw = @import("zglfw");
 const zgpu = @import("zgpu");
 const wgpu = zgpu.wgpu;
 const zstbi = @import("zstbi");
+const math = std.math;
+const assert = std.debug.assert;
 
+const content_dir = @import("build_options").content_dir;
 const window_title = "gui test";
+
+// const embedded_font_data = @embedFile(content_dir ++ "FiraCode-Medium.ttf");
 
 const DemoState = struct {
     gctx: *zgpu.GraphicsContext,
-    // texture_view: zgpu.TextureViewHandle,
+    texture_view: zgpu.TextureViewHandle,
     font_normal: zgui.Font,
     font_large: zgui.Font,
     draw_list: zgui.DrawList,
@@ -22,7 +27,39 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*DemoState {
     defer arena_state.deinit();
     const arena = arena_state.allocator();
 
-    // Skipping the create texture part.
+    zstbi.init(arena);
+    defer zstbi.deinit();
+
+    var image = try zstbi.Image.loadFromFile(content_dir ++ "genart_0025_5.png", 4);
+    defer image.deinit();
+
+    // Create a texture
+    const texture = gctx.createTexture(.{
+        .usage = .{ .texture_binding = true, .copy_dst = true },
+        .size = .{
+            .width = image.width,
+            .height = image.height,
+            .depth_or_array_layers = 1,
+        },
+        .format = zgpu.imageInfoToTextureFormat(
+            image.num_components,
+            image.bytes_per_component,
+            image.is_hdr,
+        ),
+        .mip_level_count = 1,
+    });
+    const texture_view = gctx.createTextureView(texture, .{});
+
+    gctx.queue.writeTexture(
+        .{ .texture = gctx.lookupResource(texture).? },
+        .{
+            .bytes_per_row = image.bytes_per_row,
+            .rows_per_image = image.height,
+        },
+        .{ .width = image.width, .height = image.height },
+        u8,
+        image.data,
+    );
 
     zgui.init(allocator);
     zgui.plot.init();
@@ -32,8 +69,8 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*DemoState {
         break :scale_factor @max(scale[0], scale[1]);
     };
     const font_size = 16.0 * scale_factor;
-    const font_large = zgui.io.addFontFromMemory(embedded_font_data, math.floor(font_size * 1.1));
-    const font_normal = zgui.io.addFontFromMemory(embedded_font_data, math.floor(font_size));
+    const font_large = zgui.io.addFontFromMemory(content_dir ++ "FiraCode-Medium.ttf", math.floor(font_size * 1.1));
+    const font_normal = zgui.io.addFontFromMemory(content_dir ++ "Roboto-Medium.ttf", math.floor(font_size));
     assert(zgui.io.getFont(0) == font_large);
     assert(zgui.io.getFont(1) == font_normal);
 
@@ -77,7 +114,7 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*DemoState {
 
     const demo = try allocator.create(DemoState);
 
-    demo.* = .{ .gctx = gctx, .font_normal = font_normal, .font_large = font_large, .draw_list = draw_list };
+    demo.* = .{ .gctx = gctx, .texture_view = texture_view, .font_normal = font_normal, .font_large = font_large, .draw_list = draw_list };
 
     return demo;
 }
@@ -85,7 +122,7 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*DemoState {
 fn destroy(allocator: std.mem.Allocator, demo: *DemoState) void {
     zgui.backend.deinit();
     zgui.plot.deinit();
-    zgui.destoryDrawList(demo.draw_list);
+    zgui.destroyDrawList(demo.draw_list);
     zgui.deinit();
     demo.gctx.destroy(allocator);
     allocator.destroy(demo);
@@ -108,7 +145,7 @@ fn draw(demo: *DemoState) void {
     defer swapchain_texv.release();
 
     const commands = commands: {
-        const ecnoder = gctx.device.createCommandEncoder(null);
+        const encoder = gctx.device.createCommandEncoder(null);
         defer encoder.release();
 
         // Gui pass
