@@ -15,10 +15,8 @@
     // Once all dependencies are fetched, `zig build` no longer requires
     // internet connectivity.
     .dependencies = .{
-        .sdl = .{
-            .url = "https://github.com/andrewrk/SDL/archive/db4a162db2f6f59f737d03f441455dc9524d5793.tar.gz",
-            .hash = "1220c5360c9c71c215baa41b46ec18d0711059b48416a2b1cf96c7c2d87b2e8e4cf6",
-        },
+        .zglfw = .{ .path = "../zglfw" },
+        .zgpu = .{ .path = "../zgpu" },
     },
     .paths = .{
         // This makes *all* files, recursively, included in this package. It is generally

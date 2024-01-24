@@ -1,4 +1,8 @@
 const std = @import("std");
+const zgui = @import("libs/zgui/build.zig");
+const zglfw = @import("libs/zglfw/build.zig");
+const zgpu = @import("libs/zgpu/build.zig");
+const zpool = @import("libs/zpool/build.zig");
 
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
@@ -15,20 +19,6 @@ pub fn build(b: *std.Build) !void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
-    const lib = b.addStaticLibrary(.{
-        .name = "raytrace",
-        // In this case the main source file is merely a path, however, in more
-        // complicated build scripts, this could be a generated file.
-        .root_source_file = .{ .path = "src/root.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
-
-    // This declares intent for the library to be installed into the standard
-    // location when the user invokes the "install" step (the default step when
-    // running `zig build`).
-    b.installArtifact(lib);
-
     const exe = b.addExecutable(.{
         .name = "raytrace",
         .root_source_file = .{ .path = "src/main.zig" },
@@ -36,17 +26,20 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
 
-    if (target.result.os.tag == .linux) {
-        // Add the SDL Package.
-        exe.linkSystemLibrary("SDL2");
-        exe.linkLibC();
-    } else {
-        const sdl_dep = b.dependency("sdl", .{
-            .optimize = optimize,
-            .target = target,
-        });
-        exe.linkLibrary(sdl_dep.artifact("SDL2"));
-    }
+    const zgui_pkg = zgui.package(b, target, optimize, .{
+        .options = .{ .backend = .glfw_wgpu },
+    });
+
+    zgui_pkg.link(exe);
+
+    const zglfw_pkg = zglfw.package(b, target, optimize, .{});
+    const zpool_pkg = zpool.package(b, target, optimize, .{});
+    const zgpu_pkg = zgpu.package(b, target, optimize, .{
+        .deps = .{ .zpool = zpool_pkg.zpool, .zglfw = zglfw_pkg.zglfw },
+    });
+
+    zgpu_pkg.link(exe);
+    zglfw_pkg.link(exe);
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
@@ -78,14 +71,6 @@ pub fn build(b: *std.Build) !void {
 
     // Creates a step for unit testing. This only builds the test executable
     // but does not run it.
-    const lib_unit_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/root.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
-
-    const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
-
     const exe_unit_tests = b.addTest(.{
         .root_source_file = .{ .path = "src/main.zig" },
         .target = target,
@@ -98,6 +83,5 @@ pub fn build(b: *std.Build) !void {
     // the `zig build --help` menu, providing a way for the user to request
     // running the unit tests.
     const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_lib_unit_tests.step);
     test_step.dependOn(&run_exe_unit_tests.step);
 }
