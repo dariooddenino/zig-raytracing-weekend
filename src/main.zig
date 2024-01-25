@@ -6,11 +6,35 @@ const zgpu = @import("zgpu");
 const wgpu = zgpu.wgpu;
 const zgui = @import("zgui");
 const zstbi = @import("zstbi");
+const cameras = @import("camera.zig");
+const colors = @import("color.zig");
+const objects = @import("objects.zig");
+const materials = @import("material.zig");
+const vec3 = @import("vec3.zig");
+const rtweekend = @import("rtweekend.zig");
+const bvh = @import("bvh.zig");
+
+const BVHTree = bvh.BVHTree;
+const Camera = cameras.Camera;
+const ColorAndSamples = colors.ColorAndSamples;
+const Hittable = objects.Hittable;
+const Material = materials.Material;
+const ObjectList = std.ArrayList(Hittable);
+const SharedStateImageWriter = cameras.SharedStateImageWriter;
+const Sphere = objects.Sphere;
+const Vec3 = vec3.Vec3;
 
 const content_dir = @import("build_options").content_dir;
 const window_title = "zig-gamedev: gui test (wgpu)";
 
 const embedded_font_data = @embedFile("./FiraCode-Medium.ttf");
+
+// TODO remove hittable and hittable_list
+// TODO render image to background
+// TODO manual render start
+// TODO display stats
+// TODO alter camera parameters
+// TODO save to file
 
 const DemoState = struct {
     gctx: *zgpu.GraphicsContext,
@@ -20,7 +44,87 @@ const DemoState = struct {
     draw_list: zgui.DrawList,
 };
 
-fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*DemoState {
+const RayTraceState = struct {
+    gctx: *zgpu.GraphicsContext,
+    font_normal: zgui.Font,
+    font_large: zgui.Font,
+    draw_list: zgui.DrawList,
+    camera: *Camera,
+    writer: SharedStateImageWriter,
+    world: Hittable,
+    // threads?
+    // semaphore?
+};
+
+fn createImageBuffer(allocator: std.mem.Allocator, camera: Camera) ![][]ColorAndSamples {
+    const image_buffer = try allocator.alloc([]ColorAndSamples, camera.image_width);
+
+    for (0..camera.image_width) |x| {
+        image_buffer[x] = try allocator.alloc(ColorAndSamples, camera.image_height);
+    }
+
+    for (0..camera.image_width) |x| {
+        for (0..camera.image_height) |y| {
+            image_buffer[x][y] = ColorAndSamples{ 0, 0, 0, 1 };
+        }
+    }
+
+    return image_buffer;
+}
+
+fn generateWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hittable {
+    const ground_material = Material{ .lambertian = materials.Lambertian.fromColor(Vec3{ 0.5, 0.5, 0.5 }) };
+    const ground = Sphere.init(vec3.Vec3{ 0, -1000, -1 }, 1000, ground_material);
+    try world_objects.append(ground);
+
+    var a: f32 = -11;
+    while (a < 11) : (a += 1) {
+        var b: f32 = -11;
+        while (b < 11) : (b += 1) {
+            const choose_mat = rtweekend.randomDouble();
+            const center = Vec3{ a + 0.9 * rtweekend.randomDouble(), 0.2, b + 0.9 * rtweekend.randomDouble() };
+
+            if (vec3.length(center - Vec3{ 4, 0.2, 0 }) > 0.9) {
+                // TODO: this was a shared_ptr, not entirely sure why and how to replicate.
+                // var sphere_material = material.Material{ .lambertian = material.Lambertian.fromColor(vec3.Vec3{}) };
+
+                if (choose_mat < 0.8) {
+                    // diffuse
+                    const albedo = vec3.random() * vec3.random();
+                    const sphere_material = Material{ .lambertian = materials.Lambertian.fromColor(albedo) };
+                    const center2 = center + Vec3{ 0, rtweekend.randomDoubleRange(0, 0.5), 0 };
+                    const spherei = Sphere.initMoving(center, center2, 0.2, sphere_material);
+                    try world_objects.append(spherei);
+                } else if (choose_mat < 0.95) {
+                    // metal
+                    const albedo = vec3.randomRange(0.5, 1);
+                    const fuzz = rtweekend.randomDoubleRange(0, 0.5);
+                    const sphere_material = Material{ .metal = materials.Metal.fromColor(albedo, fuzz) };
+                    try world_objects.append(Sphere.init(center, 0.2, sphere_material));
+                } else {
+                    // glass
+                    const sphere_material = Material{ .dielectric = materials.Dielectric{ .ir = 1.5 } };
+                    try world_objects.append(Sphere.init(center, 0.2, sphere_material));
+                }
+            }
+        }
+    }
+
+    const material1 = Material{ .dielectric = materials.Dielectric{ .ir = 1.5 } };
+    try world_objects.append(Sphere.init(Vec3{ 0, 1, 0 }, 1.0, material1));
+
+    const material2 = Material{ .lambertian = materials.Lambertian.fromColor(Vec3{ 0.4, 0.2, 0.1 }) };
+    try world_objects.append(Sphere.init(Vec3{ -4, 1, 0 }, 1.0, material2));
+
+    const material3 = Material{ .metal = materials.Metal.fromColor(Vec3{ 0.7, 0.6, 0.5 }, 0.1) };
+    try world_objects.append(Sphere.init(Vec3{ 4, 1, 0 }, 1.0, material3));
+
+    const tree = try BVHTree.init(allocator, world_objects.items, 0, world_objects.items.len);
+
+    return Hittable{ .tree = tree };
+}
+
+fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*RayTraceState {
     const gctx = try zgpu.GraphicsContext.create(allocator, window, .{});
     errdefer gctx.destroy(allocator);
 
@@ -31,36 +135,36 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*DemoState {
     zstbi.init(arena);
     defer zstbi.deinit();
 
-    var image = try zstbi.Image.loadFromFile(content_dir ++ "genart_0025_5.png", 4);
-    defer image.deinit();
+    // var image = try zstbi.Image.loadFromFile(content_dir ++ "genart_0025_5.png", 4);
+    // defer image.deinit();
 
     // Create a texture.
-    const texture = gctx.createTexture(.{
-        .usage = .{ .texture_binding = true, .copy_dst = true },
-        .size = .{
-            .width = image.width,
-            .height = image.height,
-            .depth_or_array_layers = 1,
-        },
-        .format = zgpu.imageInfoToTextureFormat(
-            image.num_components,
-            image.bytes_per_component,
-            image.is_hdr,
-        ),
-        .mip_level_count = 1,
-    });
-    const texture_view = gctx.createTextureView(texture, .{});
+    // const texture = gctx.createTexture(.{
+    //     .usage = .{ .texture_binding = true, .copy_dst = true },
+    //     .size = .{
+    //         .width = image.width,
+    //         .height = image.height,
+    //         .depth_or_array_layers = 1,
+    //     },
+    //     .format = zgpu.imageInfoToTextureFormat(
+    //         image.num_components,
+    //         image.bytes_per_component,
+    //         image.is_hdr,
+    //     ),
+    //     .mip_level_count = 1,
+    // });
+    // const texture_view = gctx.createTextureView(texture, .{});
 
-    gctx.queue.writeTexture(
-        .{ .texture = gctx.lookupResource(texture).? },
-        .{
-            .bytes_per_row = image.bytes_per_row,
-            .rows_per_image = image.height,
-        },
-        .{ .width = image.width, .height = image.height },
-        u8,
-        image.data,
-    );
+    // gctx.queue.writeTexture(
+    //     .{ .texture = gctx.lookupResource(texture).? },
+    //     .{
+    //         .bytes_per_row = image.bytes_per_row,
+    //         .rows_per_image = image.height,
+    //     },
+    //     .{ .width = image.width, .height = image.height },
+    //     u8,
+    //     image.data,
+    // );
 
     zgui.init(allocator);
     zgui.plot.init();
@@ -112,28 +216,74 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*DemoState {
 
     const draw_list = zgui.createDrawList();
 
-    const demo = try allocator.create(DemoState);
-    demo.* = .{
+    const raytrace = try allocator.create(RayTraceState);
+
+    var camera = try allocator.create(Camera);
+    // NOTE: Should I pass in the allocator here?
+    camera.* = Camera{};
+    try camera.initialize();
+
+    // NOTE: Do I have to deinit here??
+    const image_buffer = try createImageBuffer(allocator, camera.*);
+    const writer = SharedStateImageWriter.init(image_buffer);
+
+    var world_objects = ObjectList.init(allocator);
+    defer world_objects.deinit();
+
+    const world = try generateWorld(allocator, &world_objects);
+
+    raytrace.* = .{
         .gctx = gctx,
-        .texture_view = texture_view,
+        // .texture_view = texture_view,
         .font_normal = font_normal,
         .font_large = font_large,
         .draw_list = draw_list,
+        .camera = camera,
+        .writer = writer,
+        .world = world,
     };
 
-    return demo;
+    return raytrace;
 }
 
-fn destroy(allocator: std.mem.Allocator, demo: *DemoState) void {
+fn destroy(allocator: std.mem.Allocator, raytrace: *RayTraceState) void {
     zgui.backend.deinit();
     zgui.plot.deinit();
-    zgui.destroyDrawList(demo.draw_list);
+    zgui.destroyDrawList(raytrace.draw_list);
     zgui.deinit();
-    demo.gctx.destroy(allocator);
-    allocator.destroy(demo);
+    raytrace.gctx.destroy(allocator);
+    allocator.destroy(raytrace);
 }
 
-fn update(demo: *DemoState) !void {
+fn controlPanel(raytrace: *RayTraceState) !void {
+    _ = raytrace;
+    zgui.setNextWindowPos(.{ .x = 20.0, .y = 20.0, .cond = .first_use_ever });
+    zgui.setNextWindowSize(.{ .w = -1.0, .h = -1.0, .cond = .first_use_ever });
+
+    zgui.pushStyleVar1f(.{ .idx = .window_rounding, .v = 5.0 });
+    zgui.pushStyleVar2f(.{ .idx = .window_padding, .v = .{ 5.0, 5.0 } });
+    defer zgui.popStyleVar(.{ .count = 2 });
+
+    if (zgui.begin("Zig Raytracer", .{})) {}
+
+    zgui.end();
+}
+
+fn renderOutput(raytrace: *RayTraceState) !void {
+    _ = raytrace;
+}
+
+fn update(raytrace: *RayTraceState) !void {
+    zgui.backend.newFrame(
+        raytrace.gctx.swapchain_descriptor.width,
+        raytrace.gctx.swapchain_descriptor.height,
+    );
+
+    try controlPanel(raytrace);
+    try renderOutput(raytrace);
+}
+
+fn updatez(demo: *DemoState) !void {
     zgui.backend.newFrame(
         demo.gctx.swapchain_descriptor.width,
         demo.gctx.swapchain_descriptor.height,
@@ -552,7 +702,7 @@ fn update(demo: *DemoState) !void {
     });
 }
 
-fn draw(demo: *DemoState) void {
+fn draw(demo: *RayTraceState) void {
     const gctx = demo.gctx;
     //const fb_width = gctx.swapchain_descriptor.width;
     //const fb_height = gctx.swapchain_descriptor.height;
@@ -602,15 +752,14 @@ pub fn main() !void {
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
-
     const allocator = gpa.allocator();
 
-    const demo = try create(allocator, window);
-    defer destroy(allocator, demo);
+    const raytrace = try create(allocator, window);
+    defer destroy(allocator, raytrace);
 
     while (!window.shouldClose() and window.getKey(.escape) != .press) {
         zglfw.pollEvents();
-        try update(demo);
-        draw(demo);
+        try update(raytrace);
+        draw(raytrace);
     }
 }

@@ -3,56 +3,58 @@ const rtweekend = @import("rtweekend.zig");
 const color = @import("color.zig");
 const vec3 = @import("vec3.zig");
 const ray = @import("ray.zig");
-const hittable = @import("hittable.zig");
-const hittable_list = @import("hittable_list.zig");
 const interval = @import("interval.zig");
 const material = @import("material.zig");
 const bvh = @import("bvh.zig");
+const objects = @import("objects.zig");
 
 const toFloat = rtweekend.toFloat;
-const Hittable = hittable_list.Hittable;
+const ColorAndSamples = color.ColorAndSamples;
+const Hittable = objects.Hittable;
+const Vec3 = vec3.Vec3;
+const Vec4 = vec3.Vec4;
 
 // TODO move these two to their own file
 pub const Task = struct { thread_idx: u32, chunk_size: u32, world: Hittable, camera: *Camera };
 
 pub const SharedStateImageWriter = struct {
-    buffer: [][]color.ColorAndSamples,
+    buffer: [][]ColorAndSamples,
 
-    pub fn init(buffer: [][]color.ColorAndSamples) SharedStateImageWriter {
+    pub fn init(buffer: [][]ColorAndSamples) SharedStateImageWriter {
         return .{ .buffer = buffer };
     }
 
-    pub fn writeColor(self: SharedStateImageWriter, x: u32, y: u32, col: vec3.Vec3, number_of_samples: u64) !void {
-        self.buffer[x][y] += vec3.Vec4{ col[0], col[1], col[2], 0 };
+    pub fn writeColor(self: SharedStateImageWriter, x: u32, y: u32, col: Vec3, number_of_samples: u64) !void {
+        self.buffer[x][y] += Vec4{ col[0], col[1], col[2], 0 };
         self.buffer[x][y][3] = @floatFromInt(number_of_samples);
     }
 };
 
 pub const Camera = struct {
-    aspect_ratio: f32 = 1.0,
-    image_width: u32 = 100,
-    image_height: u32 = undefined,
+    aspect_ratio: f32 = 16.0 / 9.0,
+    image_width: u32 = 800,
+    image_height: u32 = 0,
     size: u32 = undefined,
     center: vec3.Vec3 = undefined,
     pixel00_loc: vec3.Vec3 = undefined,
     pixel_delta_u: vec3.Vec3 = undefined,
     pixel_delta_v: vec3.Vec3 = undefined,
-    samples_per_pixel: u16 = 10,
-    max_depth: u8 = 10,
-    vfov: f32 = 90,
-    lookfrom: vec3.Vec3 = vec3.Vec3{ 0, 0, -1 },
+    samples_per_pixel: u16 = 800,
+    max_depth: u8 = 16,
+    vfov: f32 = 20,
+    lookfrom: vec3.Vec3 = vec3.Vec3{ 13, 2, 3 },
     lookat: vec3.Vec3 = vec3.zero(),
     vup: vec3.Vec3 = vec3.Vec3{ 0, 1, 0 },
     u: vec3.Vec3 = vec3.zero(),
     v: vec3.Vec3 = vec3.zero(),
     w: vec3.Vec3 = vec3.zero(),
-    defocus_angle: f32 = 0,
+    defocus_angle: f32 = 0.6,
     focus_dist: f32 = 10,
-    defocus_disk_u: vec3.Vec3 = vec3.zero(),
-    defocus_disk_v: vec3.Vec3 = vec3.zero(),
-    writer: SharedStateImageWriter = undefined,
+    defocus_disk_u: Vec3 = vec3.zero(),
+    defocus_disk_v: Vec3 = vec3.zero(),
+    // writer: SharedStateImageWriter = undefined,
 
-    pub fn render(self: *Camera, context: Task, running: *bool) std.fs.File.Writer.Error!void {
+    pub fn render(self: *Camera, context: Task, writer: SharedStateImageWriter, running: *bool) std.fs.File.Writer.Error!void {
         const start_at = context.thread_idx * context.chunk_size;
         const end_before = start_at + context.chunk_size;
 
@@ -63,8 +65,8 @@ pub const Camera = struct {
 
                 const r = self.getRay(x, y);
                 const ray_color = self.rayColor(r, self.max_depth, context.world);
-
-                try self.writer.writeColor(x - 1, y - 1, ray_color, number_of_samples);
+                // TODO I think I will pass this as an arg.
+                try writer.writeColor(x - 1, y - 1, ray_color, number_of_samples);
                 if (!running.*) {
                     return;
                 }
@@ -72,64 +74,8 @@ pub const Camera = struct {
         }
     }
 
-    // Old render
-    // pub fn render(self: *Camera, stdout: anytype, world: hittable_list.HittableList, multi_thread: bool) !void {
-    //     self.initialize();
-    //     try stdout.print("P3\n{d} {d}\n255\n", .{ self.image_width, self.image_height });
-    //     // TODO Maybe this should be a general purpose allocator?
-    //     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    //     const allocator = gpa.allocator();
-    //     defer _ = gpa.deinit();
-
-    //     if (multi_thread) {
-    //         const threads_num = 8;
-    //         const lines_per_thread: u16 = @as(u16, @intFromFloat(@ceil(@as(f32, @floatFromInt(self.image_height)) / @as(f32, @floatFromInt(threads_num)))));
-    //         var threads: [threads_num]std.Thread = undefined;
-    //         var results: [threads_num]std.ArrayList(vec3.Vec3) = undefined;
-
-    //         for (0..threads_num) |t| {
-    //             results[t] = std.ArrayList(vec3.Vec3).init(allocator);
-    //             threads[t] = try std.Thread.spawn(.{}, renderThread, .{ world, self.*, lines_per_thread, t, &results[t] });
-    //         }
-
-    //         var final_image: std.ArrayList(vec3.Vec3) = std.ArrayList(vec3.Vec3).init(allocator);
-
-    //         for (0..threads_num) |t| {
-    //             threads[t].join();
-
-    //             try final_image.appendSlice(results[t].items);
-
-    //             results[t].clearAndFree();
-    //         }
-
-    //         for (final_image.items) |pixel_color| {
-    //             try color.writeColor(stdout, pixel_color, self.samples_per_pixel);
-    //         }
-    //         final_image.clearAndFree();
-    //     } else {
-    //         var j: u16 = 0;
-
-    //         while (j < self.image_height) : (j += 1) {
-    //             var i: u16 = 0;
-    //             // TODO: I should flush here to avoid overwriting with Done?
-    //             std.debug.print("\rScanlines remaining: {d}", .{self.image_height - j});
-
-    //             while (i < self.image_width) : (i += 1) {
-    //                 var pixel_color = vec3.zero();
-    //                 var k: u16 = 0;
-    //                 while (k < self.samples_per_pixel) : (k += 1) {
-    //                     const r = self.getRay(i, j);
-    //                     pixel_color = pixel_color + rayColor(r, self.max_depth, world);
-    //                 }
-
-    //                 try color.writeColor(stdout, pixel_color, self.samples_per_pixel);
-    //             }
-    //         }
-    //     }
-    // }
-
     pub fn initialize(self: *Camera) !void {
-        if (self.image_height == undefined)
+        if (self.image_height == 0)
             self.image_height = @intFromFloat(@round(toFloat(self.image_width) / self.aspect_ratio));
         if (self.image_height < 1) self.image_height = 1;
 
@@ -192,7 +138,7 @@ pub const Camera = struct {
         return ray.Ray{ .origin = ray_origin, .direction = ray_direction, .time = ray_time };
     }
 
-    fn rayColor(self: Camera, r: ray.Ray, depth: u8, world: Hittable) vec3.Vec3 {
+    fn rayColor(self: Camera, r: ray.Ray, depth: u8, world: Hittable) Vec3 {
         if (depth <= 0) {
             return vec3.zero();
         }
