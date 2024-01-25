@@ -22,6 +22,7 @@ const DemoState = struct {
 
 fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*DemoState {
     const gctx = try zgpu.GraphicsContext.create(allocator, window, .{});
+    errdefer gctx.destroy(allocator);
 
     var arena_state = std.heap.ArenaAllocator.init(allocator);
     defer arena_state.deinit();
@@ -604,10 +605,7 @@ pub fn main() !void {
 
     const allocator = gpa.allocator();
 
-    const demo = create(allocator, window) catch {
-        std.log.err("Failed to initialize the demo.", .{});
-        return;
-    };
+    const demo = try create(allocator, window);
     defer destroy(allocator, demo);
 
     while (!window.shouldClose() and window.getKey(.escape) != .press) {

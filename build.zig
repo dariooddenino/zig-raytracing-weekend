@@ -33,8 +33,9 @@ pub fn build(b: *std.Build) !void {
     const zgui_pkg = zgui.package(b, target, optimize, .{
         .options = .{ .backend = .glfw_wgpu },
     });
+
     // const zgui_pkg = zgui.package(b, target, optimize, .{});
-    const zmath_pkg = zmath.package(b, target, optimize, .{});
+    // const zmath_pkg = zmath.package(b, target, optimize, .{});
     const zglfw_pkg = zglfw.package(b, target, optimize, .{});
     // const zgpu_pkg = zgpu.package(b, target, optimize, .{});
     const zpool_pkg = zpool.package(b, target, optimize, .{});
@@ -47,8 +48,8 @@ pub fn build(b: *std.Build) !void {
     zgpu_pkg.link(exe);
     zglfw_pkg.link(exe);
     zstbi_pkg.link(exe);
-    zmath_pkg.link(exe);
-    zpool_pkg.link(exe);
+    // zmath_pkg.link(exe);
+    // zpool_pkg.link(exe);
 
     const exe_options = b.addOptions();
     exe.root_module.addOptions("build_options", exe_options);
