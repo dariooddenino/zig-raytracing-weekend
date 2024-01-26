@@ -50,6 +50,7 @@ const number_of_threads = 8;
 
 const RayTraceState = struct {
     gctx: *zgpu.GraphicsContext,
+    texture_view: zgpu.TextureViewHandle,
     font_normal: zgui.Font,
     font_large: zgui.Font,
     draw_list: zgui.DrawList,
@@ -154,37 +155,6 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*RayTraceState {
     zstbi.init(arena);
     defer zstbi.deinit();
 
-    // var image = try zstbi.Image.loadFromFile(content_dir ++ "genart_0025_5.png", 4);
-    // defer image.deinit();
-
-    // Create a texture.
-    // const texture = gctx.createTexture(.{
-    //     .usage = .{ .texture_binding = true, .copy_dst = true },
-    //     .size = .{
-    //         .width = image.width,
-    //         .height = image.height,
-    //         .depth_or_array_layers = 1,
-    //     },
-    //     .format = zgpu.imageInfoToTextureFormat(
-    //         image.num_components,
-    //         image.bytes_per_component,
-    //         image.is_hdr,
-    //     ),
-    //     .mip_level_count = 1,
-    // });
-    // const texture_view = gctx.createTextureView(texture, .{});
-
-    // gctx.queue.writeTexture(
-    //     .{ .texture = gctx.lookupResource(texture).? },
-    //     .{
-    //         .bytes_per_row = image.bytes_per_row,
-    //         .rows_per_image = image.height,
-    //     },
-    //     .{ .width = image.width, .height = image.height },
-    //     u8,
-    //     image.data,
-    // );
-
     zgui.init(allocator);
     zgui.plot.init();
     const scale_factor = scale_factor: {
@@ -255,9 +225,36 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*RayTraceState {
 
     var running = false;
 
+    // TODO this is not working
+    var image = try zstbi.Image.loadFromMemory(image_buffer, 4);
+    defer image.deinit();
+
+    const texture = gctx.createTexture(.{ .usage = .{ .texture_binding = true, .copy_dst = true }, .size = .{
+        .width = camera.image_width,
+        .height = camera.image_height,
+        .depth_or_array_layers = 2,
+    }, .format = zgpu.imageInfoToTextureFormat(
+        image.num_components,
+        image.bytes_per_component,
+        image.is_hdr,
+    ), .mip_level_count = 1 });
+
+    const texture_view = gctx.createTextureView(texture, .{});
+
+    gctx.queue.writeTexture(
+        .{ .texture = gctx.lookupResource(texture).? },
+        .{
+            .bytes_per_row = image.bytes_per_row,
+            .rows_per_image = image.height,
+        },
+        .{ .width = image.width, .height = image.height },
+        u8,
+        image.data,
+    );
+
     raytrace.* = .{
         .gctx = gctx,
-        // .texture_view = texture_view,
+        .texture_view = texture_view,
         .font_normal = font_normal,
         .font_large = font_large,
         .draw_list = draw_list,
@@ -300,30 +297,6 @@ fn controlPanel(raytrace: *RayTraceState) !void {
 
 fn renderOutput(raytrace: *RayTraceState) !void {
     _ = raytrace;
-    var image = try zstbi.Image.loadFromMemory(raytrace.writer.image_buffer, 4);
-    defer image.deinit();
-
-    const texture = gctx.createTexture(.{
-      .usage = .{ .texture_binding = true, .copy_dst = true },
-      .size = .{
-        .width = raytrace.camera.image_width,
-        .height = raytrace.camera.image_height,
-        .depth_or_array_layers = 2,
-      },
-      .format = zgpu.imageInfoToTextureFormat(
-        image.num_components,
-        image.bytes_per_component,
-        image.is_hdr,
-      ),
-      .mip_level_count = 1
-    });
-
-    const texture_view = gctx.createTextureView(texture, .{});
-
-    TODO:
-    I think I have to add the texture thing in the object
-    And I have no ide of how this actually works
-    gctx.queue.writeTexture()
 }
 
 fn update(raytrace: *RayTraceState) !void {
