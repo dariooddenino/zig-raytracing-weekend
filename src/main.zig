@@ -281,7 +281,6 @@ fn destroy(allocator: std.mem.Allocator, raytrace: *RayTraceState) void {
 }
 
 fn controlPanel(raytrace: *RayTraceState) !void {
-    _ = raytrace;
     zgui.setNextWindowPos(.{ .x = 20.0, .y = 20.0, .cond = .first_use_ever });
     zgui.setNextWindowSize(.{ .w = -1.0, .h = -1.0, .cond = .first_use_ever });
 
@@ -289,13 +288,42 @@ fn controlPanel(raytrace: *RayTraceState) !void {
     zgui.pushStyleVar2f(.{ .idx = .window_padding, .v = .{ 5.0, 5.0 } });
     defer zgui.popStyleVar(.{ .count = 2 });
 
-    if (zgui.begin("Zig Raytracer", .{})) {}
+    if (zgui.begin("Zig Raytracer", .{})) {
+        zgui.bullet();
+        zgui.textUnformattedColored(.{ 0, 0.8, 0, 1 }, "Rendering :");
+        zgui.sameLine(.{});
+        zgui.text("{}", .{raytrace.render_running.*});
+    }
 
     zgui.end();
 }
 
 fn renderOutput(raytrace: *RayTraceState) !void {
     _ = raytrace;
+    var image = try zstbi.Image.loadFromMemory(raytrace.writer.image_buffer, 4);
+    defer image.deinit();
+
+    const texture = gctx.createTexture(.{
+      .usage = .{ .texture_binding = true, .copy_dst = true },
+      .size = .{
+        .width = raytrace.camera.image_width,
+        .height = raytrace.camera.image_height,
+        .depth_or_array_layers = 2,
+      },
+      .format = zgpu.imageInfoToTextureFormat(
+        image.num_components,
+        image.bytes_per_component,
+        image.is_hdr,
+      ),
+      .mip_level_count = 1
+    });
+
+    const texture_view = gctx.createTextureView(texture, .{});
+
+    TODO:
+    I think I have to add the texture thing in the object
+    And I have no ide of how this actually works
+    gctx.queue.writeTexture()
 }
 
 fn update(raytrace: *RayTraceState) !void {
