@@ -44,6 +44,12 @@ pub const Hittable = union(enum) {
             inline else => |object| return object.boundingBox(),
         }
     }
+
+    pub fn deinit(self: Hittable) void {
+        switch (self) {
+            inline else => |object| object.deinit(),
+        }
+    }
 };
 
 pub const Sphere = struct {
@@ -62,6 +68,8 @@ pub const Sphere = struct {
         const rvec = Vec3{ radius, radius, radius };
         return Hittable{ .sphere = Sphere{ .center1 = center1, .radius = radius, .mat = mat, .bounding_box = Aabb.fromPoints(center1 - rvec, center1 + rvec) } };
     }
+
+    pub fn deinit(_: Sphere) void {}
 
     pub fn initMoving(center1: Vec3, center2: Vec3, radius: f32, mat: Material) Hittable {
         const rvec = Vec3{ radius, radius, radius };

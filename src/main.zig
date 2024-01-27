@@ -59,23 +59,8 @@ const RayTraceState = struct {
     world: Hittable,
     threads: std.ArrayList(std.Thread),
     render_running: *bool,
+    allocator: std.mem.Allocator,
 };
-
-fn createImageBuffer(allocator: std.mem.Allocator, camera: Camera) ![][]ColorAndSamples {
-    const image_buffer = try allocator.alloc([]ColorAndSamples, camera.image_width);
-
-    for (0..camera.image_width) |x| {
-        image_buffer[x] = try allocator.alloc(ColorAndSamples, camera.image_height);
-    }
-
-    for (0..camera.image_width) |x| {
-        for (0..camera.image_height) |y| {
-            image_buffer[x][y] = ColorAndSamples{ 0, 0, 0, 1 };
-        }
-    }
-
-    return image_buffer;
-}
 
 fn generateWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hittable {
     const ground_material = Material{ .lambertian = materials.Lambertian.fromColor(Vec3{ 0.5, 0.5, 0.5 }) };
@@ -144,15 +129,29 @@ fn startRender(allocator: std.mem.Allocator, raytrace: *RayTraceState) !void {
     }
 }
 
+// NOTE: I have no fucking clue of how this works...
+fn bufferToData(allocator: std.mem.Allocator, image_buffer: [][]vec3.Vec4) ![]u8 {
+    const num_columns = image_buffer[0].len;
+    const data = try allocator.alloc(u8, image_buffer.len * image_buffer[0].len * 3);
+    for (image_buffer, 0..) |row, row_num| {
+        // std.debug.print("\nrow: {d}\n", .{row_num});
+        for (row, 0..) |pixel, pixel_num| {
+            const current_pixel = pixel_num + (row_num * num_columns);
+            // std.debug.print("{d} ", .{pixel_num + (row_num * num_columns)});
+            for (0..3) |pixel_component| {
+                data[pixel_component + (3 * current_pixel)] = @as(u8, @intFromFloat(pixel[pixel_component]));
+            }
+        }
+    }
+    std.debug.print("\n{any}\n", .{data});
+    return data;
+}
+
 fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*RayTraceState {
     const gctx = try zgpu.GraphicsContext.create(allocator, window, .{});
     errdefer gctx.destroy(allocator);
 
-    var arena_state = std.heap.ArenaAllocator.init(allocator);
-    defer arena_state.deinit();
-    const arena = arena_state.allocator();
-
-    zstbi.init(arena);
+    zstbi.init(allocator);
     defer zstbi.deinit();
 
     zgui.init(allocator);
@@ -208,26 +207,37 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*RayTraceState {
     const raytrace = try allocator.create(RayTraceState);
 
     var camera = try allocator.create(Camera);
-    // NOTE: Should I pass in the allocator here?
     camera.* = Camera{};
-    try camera.initialize();
+    try camera.init();
+    // defer camera.deinit();
 
-    // NOTE: Do I have to deinit here??
-    const image_buffer = try createImageBuffer(allocator, camera.*);
-    const writer = SharedStateImageWriter.init(image_buffer);
+    const writer = try SharedStateImageWriter.init(allocator, camera.image_width, camera.image_height);
+    // NOTE: How to handle this?
+    // defer writer.deinit();
 
     var world_objects = ObjectList.init(allocator);
-    defer world_objects.deinit();
+    // defer world_objects.deinit();
 
     const world = try generateWorld(allocator, &world_objects);
+    // defer world.deinit();
 
     const threads = std.ArrayList(std.Thread).init(allocator);
 
-    var running = false;
+    var running = true;
 
     // TODO this is not working
-    var image = try zstbi.Image.loadFromMemory(image_buffer, 4);
-    defer image.deinit();
+    //var image = try zstbi.Image.loadFromMemory(image_buffer, 4);
+    //defer image.deinit();
+    const image = zstbi.Image{
+        .data = try bufferToData(allocator, writer.buffer),
+        .width = camera.image_width,
+        .height = camera.image_height,
+        .num_components = 4,
+        .bytes_per_component = 1,
+        .bytes_per_row = camera.image_width * 4,
+        .is_hdr = false,
+    };
+    // defer image.deinit();
 
     const texture = gctx.createTexture(.{ .usage = .{ .texture_binding = true, .copy_dst = true }, .size = .{
         .width = camera.image_width,
@@ -263,6 +273,7 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*RayTraceState {
         .world = world,
         .threads = threads,
         .render_running = &running,
+        .allocator = allocator,
     };
 
     return raytrace;
@@ -307,6 +318,42 @@ fn update(raytrace: *RayTraceState) !void {
 
     try controlPanel(raytrace);
     try renderOutput(raytrace);
+
+    // NOTE: I don't expect this to work, but it's a start.
+    // const image = zstbi.Image{
+    //     .data = try bufferToData(raytrace.allocator, raytrace.writer.buffer),
+    //     .width = raytrace.camera.image_width,
+    //     .height = raytrace.camera.image_height,
+    //     .num_components = 4,
+    //     .bytes_per_component = 1,
+    //     .bytes_per_row = raytrace.camera.image_width * 4,
+    //     .is_hdr = false,
+    // };
+
+    // const texture = raytrace.gctx.createTexture(.{ .usage = .{ .texture_binding = true, .copy_dst = true }, .size = .{
+    //     .width = raytrace.camera.image_width,
+    //     .height = raytrace.camera.image_height,
+    //     .depth_or_array_layers = 2,
+    // }, .format = zgpu.imageInfoToTextureFormat(
+    //     image.num_components,
+    //     image.bytes_per_component,
+    //     image.is_hdr,
+    // ), .mip_level_count = 1 });
+
+    // const texture_view = raytrace.gctx.createTextureView(texture, .{});
+
+    // raytrace.gctx.queue.writeTexture(
+    //     .{ .texture = raytrace.gctx.lookupResource(texture).? },
+    //     .{
+    //         .bytes_per_row = image.bytes_per_row,
+    //         .rows_per_image = image.height,
+    //     },
+    //     .{ .width = image.width, .height = image.height },
+    //     u8,
+    //     image.data,
+    // );
+
+    // raytrace.texture_view = texture_view;
 }
 
 // fn updatez(demo: *DemoState) !void {
@@ -778,7 +825,9 @@ pub fn main() !void {
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    var arena_state = std.heap.ArenaAllocator.init(gpa.allocator());
+    defer arena_state.deinit();
+    const allocator = arena_state.allocator();
 
     const raytrace = try create(allocator, window);
     defer destroy(allocator, raytrace);

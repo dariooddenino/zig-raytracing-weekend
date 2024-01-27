@@ -19,9 +19,31 @@ pub const Task = struct { thread_idx: u32, chunk_size: u32, world: Hittable, cam
 
 pub const SharedStateImageWriter = struct {
     buffer: [][]ColorAndSamples,
+    width: u32,
+    height: u32,
+    allocator: std.mem.Allocator,
 
-    pub fn init(buffer: [][]ColorAndSamples) SharedStateImageWriter {
-        return .{ .buffer = buffer };
+    pub fn init(allocator: std.mem.Allocator, image_width: u32, image_height: u32) !SharedStateImageWriter {
+        const image_buffer = try allocator.alloc([]ColorAndSamples, image_width);
+
+        for (0..image_width) |x| {
+            image_buffer[x] = try allocator.alloc(ColorAndSamples, image_height);
+        }
+
+        for (0..image_width) |x| {
+            for (0..image_height) |y| {
+                image_buffer[x][y] = ColorAndSamples{ 255, 255, 255, 1 };
+            }
+        }
+
+        return .{ .buffer = image_buffer, .width = image_width, .height = image_height, .allocator = allocator };
+    }
+
+    pub fn deinit(self: SharedStateImageWriter) void {
+        for (0..self.width) |x| {
+            self.allocator.free(self.buffer[x]);
+        }
+        self.allocator.free(self.buffer);
     }
 
     pub fn writeColor(self: SharedStateImageWriter, x: u32, y: u32, col: Vec3, number_of_samples: u64) !void {
@@ -32,7 +54,7 @@ pub const SharedStateImageWriter = struct {
 
 pub const Camera = struct {
     aspect_ratio: f32 = 16.0 / 9.0,
-    image_width: u32 = 800,
+    image_width: u32 = 100,
     image_height: u32 = 0,
     size: u32 = undefined,
     center: vec3.Vec3 = undefined,
@@ -74,7 +96,7 @@ pub const Camera = struct {
         }
     }
 
-    pub fn initialize(self: *Camera) !void {
+    pub fn init(self: *Camera) !void {
         if (self.image_height == 0)
             self.image_height = @intFromFloat(@round(toFloat(self.image_width) / self.aspect_ratio));
         if (self.image_height < 1) self.image_height = 1;
