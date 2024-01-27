@@ -114,8 +114,8 @@ fn generateWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hitt
     return Hittable{ .tree = tree };
 }
 
-pub fn renderFn(context: Task, running: *bool) !void {
-    try context.camera.render(context, running);
+pub fn renderFn(context: Task, raytrace: *RayTraceState) !void {
+    try raytrace.camera.render(context, raytrace.writer, raytrace.render_running);
 }
 
 fn startRender(allocator: std.mem.Allocator, raytrace: *RayTraceState) !void {
@@ -123,7 +123,7 @@ fn startRender(allocator: std.mem.Allocator, raytrace: *RayTraceState) !void {
         const chunk_size = (raytrace.camera.image_width * raytrace.camera.image_height) / number_of_threads;
         const task = Task{ .thread_idx = @intCast(thread_idx), .chunk_size = chunk_size, .world = raytrace.world, .camera = raytrace.camera };
 
-        const thread = try std.Thread.spawn(.{ .allocator = allocator }, renderFn, .{ task, raytrace.running });
+        const thread = try std.Thread.spawn(.{ .allocator = allocator }, renderFn, .{ task, raytrace });
 
         try raytrace.threads.append(thread);
     }
@@ -132,18 +132,22 @@ fn startRender(allocator: std.mem.Allocator, raytrace: *RayTraceState) !void {
 // NOTE: I have no fucking clue of how this works...
 fn bufferToData(allocator: std.mem.Allocator, image_buffer: [][]vec3.Vec4) ![]u8 {
     const num_columns = image_buffer[0].len;
-    const data = try allocator.alloc(u8, image_buffer.len * image_buffer[0].len * 3);
+    const data = try allocator.alloc(u8, image_buffer.len * image_buffer[0].len * 4);
     for (image_buffer, 0..) |row, row_num| {
         // std.debug.print("\nrow: {d}\n", .{row_num});
         for (row, 0..) |pixel, pixel_num| {
             const current_pixel = pixel_num + (row_num * num_columns);
             // std.debug.print("{d} ", .{pixel_num + (row_num * num_columns)});
-            for (0..3) |pixel_component| {
-                data[pixel_component + (3 * current_pixel)] = @as(u8, @intFromFloat(pixel[pixel_component]));
+            for (0..4) |pixel_component| {
+                var pixel_value: u8 = 255;
+                if (pixel_component < 3) {
+                    // NOTE: I think this is distorting the colors, not the right approach.
+                    pixel_value = @as(u8, @intFromFloat(@min(255, pixel[pixel_component])));
+                }
+                data[pixel_component + (4 * current_pixel)] = pixel_value;
             }
         }
     }
-    std.debug.print("\n{any}\n", .{data});
     return data;
 }
 
@@ -223,13 +227,12 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*RayTraceState {
 
     const threads = std.ArrayList(std.Thread).init(allocator);
 
-    var running = true;
+    // var running = true;
 
-    // TODO this is not working
-    //var image = try zstbi.Image.loadFromMemory(image_buffer, 4);
-    //defer image.deinit();
+    const image_data = try bufferToData(allocator, writer.buffer);
+
     const image = zstbi.Image{
-        .data = try bufferToData(allocator, writer.buffer),
+        .data = image_data,
         .width = camera.image_width,
         .height = camera.image_height,
         .num_components = 4,
@@ -237,12 +240,11 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*RayTraceState {
         .bytes_per_row = camera.image_width * 4,
         .is_hdr = false,
     };
-    // defer image.deinit();
 
     const texture = gctx.createTexture(.{ .usage = .{ .texture_binding = true, .copy_dst = true }, .size = .{
-        .width = camera.image_width,
-        .height = camera.image_height,
-        .depth_or_array_layers = 2,
+        .width = image.width,
+        .height = image.height,
+        .depth_or_array_layers = 1,
     }, .format = zgpu.imageInfoToTextureFormat(
         image.num_components,
         image.bytes_per_component,
@@ -250,6 +252,29 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*RayTraceState {
     ), .mip_level_count = 1 });
 
     const texture_view = gctx.createTextureView(texture, .{});
+
+    // var image = try zstbi.Image.loadFromFile(content_dir ++ "test.png", 4);
+    // defer image.deinit();
+
+    // // std.debug.print("\n{any}\n", .{image.data});
+
+    // std.debug.print("\n{d}\n", .{image.data.len});
+
+    // const texture = gctx.createTexture(.{
+    //     .usage = .{ .texture_binding = true, .copy_dst = true },
+    //     .size = .{
+    //         .width = image.width,
+    //         .height = image.height,
+    //         .depth_or_array_layers = 1,
+    //     },
+    //     .format = zgpu.imageInfoToTextureFormat(
+    //         image.num_components,
+    //         image.bytes_per_component,
+    //         image.is_hdr,
+    //     ),
+    //     .mip_level_count = 1,
+    // });
+    // const texture_view = gctx.createTextureView(texture, .{});
 
     gctx.queue.writeTexture(
         .{ .texture = gctx.lookupResource(texture).? },
@@ -262,6 +287,9 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*RayTraceState {
         image.data,
     );
 
+    const running = try allocator.create(bool);
+    running.* = true;
+
     raytrace.* = .{
         .gctx = gctx,
         .texture_view = texture_view,
@@ -272,9 +300,12 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*RayTraceState {
         .writer = writer,
         .world = world,
         .threads = threads,
-        .render_running = &running,
+        .render_running = running,
         .allocator = allocator,
     };
+
+    // NOTE: auto start for now
+    try startRender(allocator, raytrace);
 
     return raytrace;
 }
@@ -320,40 +351,48 @@ fn update(raytrace: *RayTraceState) !void {
     try renderOutput(raytrace);
 
     // NOTE: I don't expect this to work, but it's a start.
-    // const image = zstbi.Image{
-    //     .data = try bufferToData(raytrace.allocator, raytrace.writer.buffer),
-    //     .width = raytrace.camera.image_width,
-    //     .height = raytrace.camera.image_height,
-    //     .num_components = 4,
-    //     .bytes_per_component = 1,
-    //     .bytes_per_row = raytrace.camera.image_width * 4,
-    //     .is_hdr = false,
-    // };
+    const image_data = try bufferToData(raytrace.allocator, raytrace.writer.buffer);
 
-    // const texture = raytrace.gctx.createTexture(.{ .usage = .{ .texture_binding = true, .copy_dst = true }, .size = .{
-    //     .width = raytrace.camera.image_width,
-    //     .height = raytrace.camera.image_height,
-    //     .depth_or_array_layers = 2,
-    // }, .format = zgpu.imageInfoToTextureFormat(
-    //     image.num_components,
-    //     image.bytes_per_component,
-    //     image.is_hdr,
-    // ), .mip_level_count = 1 });
+    const image = zstbi.Image{
+        .data = image_data,
+        .width = raytrace.camera.image_width,
+        .height = raytrace.camera.image_height,
+        .num_components = 4,
+        .bytes_per_component = 1,
+        .bytes_per_row = raytrace.camera.image_width * 4,
+        .is_hdr = false,
+    };
 
-    // const texture_view = raytrace.gctx.createTextureView(texture, .{});
+    const texture = raytrace.gctx.createTexture(.{ .usage = .{ .texture_binding = true, .copy_dst = true }, .size = .{
+        .width = image.width,
+        .height = image.height,
+        .depth_or_array_layers = 1,
+    }, .format = zgpu.imageInfoToTextureFormat(
+        image.num_components,
+        image.bytes_per_component,
+        image.is_hdr,
+    ), .mip_level_count = 1 });
 
-    // raytrace.gctx.queue.writeTexture(
-    //     .{ .texture = raytrace.gctx.lookupResource(texture).? },
-    //     .{
-    //         .bytes_per_row = image.bytes_per_row,
-    //         .rows_per_image = image.height,
-    //     },
-    //     .{ .width = image.width, .height = image.height },
-    //     u8,
-    //     image.data,
-    // );
+    const texture_view = raytrace.gctx.createTextureView(texture, .{});
 
-    // raytrace.texture_view = texture_view;
+    raytrace.gctx.queue.writeTexture(
+        .{ .texture = raytrace.gctx.lookupResource(texture).? },
+        .{
+            .bytes_per_row = image.bytes_per_row,
+            .rows_per_image = image.height,
+        },
+        .{ .width = image.width, .height = image.height },
+        u8,
+        image.data,
+    );
+
+    raytrace.texture_view = texture_view;
+
+    const tex_id = raytrace.gctx.lookupResource(raytrace.texture_view).?;
+    // zgui.image(tex_id, .{ .w = 100.0, .h = 10.0 });
+
+    const draw_list = zgui.getBackgroundDrawList();
+    draw_list.addImage(tex_id, .{ .pmin = .{ 30, 30 }, .pmax = .{ @floatFromInt(raytrace.camera.image_width + 30), @floatFromInt(raytrace.camera.image_height + 30) } });
 }
 
 // fn updatez(demo: *DemoState) !void {

@@ -2,13 +2,13 @@ const std = @import("std");
 const interval = @import("interval.zig");
 const vec3 = @import("vec3.zig");
 const ray = @import("ray.zig");
-const hittable = @import("hittable.zig");
 const rtweekend = @import("rtweekend.zig");
+const objects = @import("objects.zig");
 
 const Interval = interval.Interval;
 const Vec3 = vec3.Vec3;
 const Ray = ray.Ray;
-const HitRecord = hittable.HitRecord;
+const HitRecord = objects.HitRecord;
 
 pub const Aabb = struct {
     x: Interval = Interval{ .min = 0, .max = 0 },

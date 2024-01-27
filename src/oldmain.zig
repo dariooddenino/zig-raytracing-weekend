@@ -93,6 +93,7 @@ pub fn main() !void {
     var running = true;
     var threads = std.ArrayList(std.Thread).init(allocator);
 
+    // TODO: I think this Task structure makes no sense now.
     for (0..number_of_threads) |thread_idx| {
         const task = Task{ .thread_idx = @intCast(thread_idx), .chunk_size = (image_width * image_height) / number_of_threads, .world = world, .camera = &cam };
 

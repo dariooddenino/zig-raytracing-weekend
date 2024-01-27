@@ -2,14 +2,14 @@ const std = @import("std");
 const rtweekend = @import("rtweekend.zig");
 const vec3 = @import("vec3.zig");
 const ray = @import("ray.zig");
-const hittable = @import("hittable.zig");
+const objects = @import("objects.zig");
 
 pub const Material = union(enum) {
     lambertian: Lambertian,
     metal: Metal,
     dielectric: Dielectric,
 
-    pub fn scatter(self: Material, r_in: ray.Ray, rec: hittable.HitRecord, attenuation: *vec3.Vec3, scattered: *ray.Ray) bool {
+    pub fn scatter(self: Material, r_in: ray.Ray, rec: objects.HitRecord, attenuation: *vec3.Vec3, scattered: *ray.Ray) bool {
         switch (self) {
             inline else => |object| return object.scatter(r_in, rec, attenuation, scattered),
         }
@@ -23,7 +23,7 @@ pub const Lambertian = struct {
         return Lambertian{ .albedo = color };
     }
 
-    pub fn scatter(self: Lambertian, r_in: ray.Ray, rec: hittable.HitRecord, attenuation: *vec3.Vec3, scattered: *ray.Ray) bool {
+    pub fn scatter(self: Lambertian, r_in: ray.Ray, rec: objects.HitRecord, attenuation: *vec3.Vec3, scattered: *ray.Ray) bool {
         var scatter_direction = rec.normal + vec3.randomUnitVector();
 
         // Catch degenerate scatter direction
@@ -45,7 +45,7 @@ pub const Metal = struct {
         return Metal{ .albedo = color, .fuzz = if (f < 1) f else 1 };
     }
 
-    pub fn scatter(self: Metal, r_in: ray.Ray, rec: hittable.HitRecord, attenuation: *vec3.Vec3, scattered: *ray.Ray) bool {
+    pub fn scatter(self: Metal, r_in: ray.Ray, rec: objects.HitRecord, attenuation: *vec3.Vec3, scattered: *ray.Ray) bool {
         const reflected = vec3.reflect(vec3.unitVector(r_in.direction), rec.normal);
         scattered.* = ray.Ray{ .origin = rec.p, .direction = reflected + vec3.splat3(self.fuzz) * vec3.randomUnitVector(), .time = r_in.time };
         attenuation.* = self.albedo;
@@ -56,7 +56,7 @@ pub const Metal = struct {
 pub const Dielectric = struct {
     ir: f32 = 1,
 
-    pub fn scatter(self: Dielectric, r_in: ray.Ray, rec: hittable.HitRecord, attenuation: *vec3.Vec3, scattered: *ray.Ray) bool {
+    pub fn scatter(self: Dielectric, r_in: ray.Ray, rec: objects.HitRecord, attenuation: *vec3.Vec3, scattered: *ray.Ray) bool {
         attenuation.* = vec3.Vec3{ 1, 1, 1 };
         const refraction_ratio = if (rec.front_face) (1.0 / self.ir) else self.ir;
 
