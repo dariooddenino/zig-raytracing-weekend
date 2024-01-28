@@ -7,6 +7,7 @@ const interval = @import("interval.zig");
 const material = @import("material.zig");
 const bvh = @import("bvh.zig");
 const objects = @import("objects.zig");
+const RayTraceState = @import("main.zig").RayTraceState;
 
 const toFloat = rtweekend.toFloat;
 const ColorAndSamples = color.ColorAndSamples;
@@ -17,26 +18,30 @@ const Vec4 = vec3.Vec4;
 // TODO move these two to their own file
 pub const Task = struct { thread_idx: u32, chunk_size: u32, world: Hittable, camera: *Camera };
 
-// WARNING: I tried swapping x with y, and now I get a decent image, but it produces some weird banding artifacts.
-// I think this is because I'm not chunking the work or writing to the image in the correct way? very wierd.
+// The buffer stores all lines sequentially.
 pub const SharedStateImageWriter = struct {
-    buffer: [][]ColorAndSamples,
+    buffer: []ColorAndSamples,
     width: u32,
     height: u32,
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator, image_width: u32, image_height: u32) !SharedStateImageWriter {
-        const image_buffer = try allocator.alloc([]ColorAndSamples, image_height);
+        const size = image_height * image_width;
+        const image_buffer = try allocator.alloc(ColorAndSamples, size);
 
-        for (0..image_height) |y| {
-            image_buffer[y] = try allocator.alloc(ColorAndSamples, image_width);
+        for (0..size) |pos| {
+            image_buffer[pos] = ColorAndSamples{ 0, 0, 0, 1 };
         }
 
-        for (0..image_height) |y| {
-            for (0..image_width) |x| {
-                image_buffer[y][x] = ColorAndSamples{ 0, 0, 0, 1 };
-            }
-        }
+        // for (0..image_height) |y| {
+        //     image_buffer[y] = try allocator.alloc(ColorAndSamples, image_width);
+        // }
+
+        // for (0..image_height) |y| {
+        //     for (0..image_width) |x| {
+        //         image_buffer[y][x] = ColorAndSamples{ 0, 0, 0, 1 };
+        //     }
+        // }
 
         return .{ .buffer = image_buffer, .width = image_width, .height = image_height, .allocator = allocator };
     }
@@ -48,22 +53,27 @@ pub const SharedStateImageWriter = struct {
         self.allocator.free(self.buffer);
     }
 
-    pub fn writeColor(self: SharedStateImageWriter, x: u32, y: u32, col: Vec3, number_of_samples: u64) !void {
-        self.buffer[y][x] += Vec4{ col[0], col[1], col[2], 0 };
-        self.buffer[y][x][3] = @floatFromInt(number_of_samples);
+    pub fn writeColor(self: SharedStateImageWriter, i: usize, col: Vec3, number_of_samples: u64) !void {
+        var pixel_color = Vec4{ col[0], col[1], col[2], 0 };
+        pixel_color[3] = @floatFromInt(number_of_samples);
+        // const position = (y) + ((x) * self.height);
+        self.buffer[i] += pixel_color;
+        // std.debug.print("\nPRINTING: x:{d} col:{any} \n", .{ i, pixel_color });
+        // self.buffer[y][x] += Vec4{ col[0], col[1], col[2], 0 };
+        // self.buffer[y][x][3] = @floatFromInt(number_of_samples);
     }
 };
 
 pub const Camera = struct {
     aspect_ratio: f32 = 16.0 / 9.0,
-    image_width: u32 = 300,
-    image_height: u32 = 200,
+    image_width: u32 = 400,
+    image_height: u32 = 0,
     size: u32 = undefined,
     center: vec3.Vec3 = undefined,
     pixel00_loc: vec3.Vec3 = undefined,
     pixel_delta_u: vec3.Vec3 = undefined,
     pixel_delta_v: vec3.Vec3 = undefined,
-    samples_per_pixel: u16 = 300,
+    samples_per_pixel: u16 = 200,
     max_depth: u8 = 16,
     vfov: f32 = 20,
     lookfrom: vec3.Vec3 = vec3.Vec3{ 13, 2, 3 },
@@ -77,7 +87,7 @@ pub const Camera = struct {
     defocus_disk_u: Vec3 = vec3.zero(),
     defocus_disk_v: Vec3 = vec3.zero(),
 
-    pub fn render(self: *Camera, context: Task, writer: SharedStateImageWriter, running: *bool) std.fs.File.Writer.Error!void {
+    pub fn render(self: *Camera, context: Task, writer: SharedStateImageWriter, render_running: *bool) std.fs.File.Writer.Error!void {
         std.debug.print("TASK: {any}\n", .{context});
         const start_at = context.thread_idx * context.chunk_size;
         const end_before = start_at + context.chunk_size;
@@ -89,8 +99,8 @@ pub const Camera = struct {
                 const r = self.getRay(x, y);
                 const ray_color = self.rayColor(r, self.max_depth, context.world);
                 // TODO I think I will pass this as an arg.
-                try writer.writeColor(x - 1, y - 1, ray_color, number_of_samples);
-                if (!running.*) {
+                try writer.writeColor(i, ray_color, number_of_samples);
+                if (!render_running.*) {
                     return;
                 }
             }
