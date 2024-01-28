@@ -56,14 +56,14 @@ pub const SharedStateImageWriter = struct {
 
 pub const Camera = struct {
     aspect_ratio: f32 = 16.0 / 9.0,
-    image_width: u32 = 800,
-    image_height: u32 = 0,
+    image_width: u32 = 300,
+    image_height: u32 = 200,
     size: u32 = undefined,
     center: vec3.Vec3 = undefined,
     pixel00_loc: vec3.Vec3 = undefined,
     pixel_delta_u: vec3.Vec3 = undefined,
     pixel_delta_v: vec3.Vec3 = undefined,
-    samples_per_pixel: u16 = 800,
+    samples_per_pixel: u16 = 300,
     max_depth: u8 = 16,
     vfov: f32 = 20,
     lookfrom: vec3.Vec3 = vec3.Vec3{ 13, 2, 3 },
@@ -78,6 +78,7 @@ pub const Camera = struct {
     defocus_disk_v: Vec3 = vec3.zero(),
 
     pub fn render(self: *Camera, context: Task, writer: SharedStateImageWriter, running: *bool) std.fs.File.Writer.Error!void {
+        std.debug.print("TASK: {any}\n", .{context});
         const start_at = context.thread_idx * context.chunk_size;
         const end_before = start_at + context.chunk_size;
         for (1..self.samples_per_pixel + 1) |number_of_samples| {

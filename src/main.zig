@@ -29,7 +29,7 @@ const content_dir = @import("build_options").content_dir;
 const window_title = "zig-gamedev: gui test (wgpu)";
 
 const embedded_font_data = @embedFile("./FiraCode-Medium.ttf");
-const number_of_threads = 8;
+const number_of_threads = 1;
 
 // TODO number of threads not hardcoded?
 // TODO join threads where?
@@ -254,6 +254,17 @@ fn destroy(allocator: std.mem.Allocator, raytrace: *RayTraceState) void {
     allocator.destroy(raytrace);
 }
 
+pub fn countSamples(raytrace: *RayTraceState) f32 {
+    const buffer = raytrace.writer.buffer;
+    var samples: f32 = 0;
+    for (buffer) |row| {
+        for (row) |pixel| {
+            samples += pixel[3];
+        }
+    }
+    return samples;
+}
+
 fn controlPanel(raytrace: *RayTraceState) !void {
     zgui.setNextWindowPos(.{ .x = 20.0, .y = 20.0, .cond = .first_use_ever });
     zgui.setNextWindowSize(.{ .w = -1.0, .h = -1.0, .cond = .first_use_ever });
@@ -262,11 +273,18 @@ fn controlPanel(raytrace: *RayTraceState) !void {
     zgui.pushStyleVar2f(.{ .idx = .window_padding, .v = .{ 5.0, 5.0 } });
     defer zgui.popStyleVar(.{ .count = 2 });
 
+    const current_samples = countSamples(raytrace);
+    const total_samples = raytrace.camera.samples_per_pixel * raytrace.camera.image_height * raytrace.camera.image_width;
+
     if (zgui.begin("Zig Raytracer", .{})) {
         zgui.bullet();
         zgui.textUnformattedColored(.{ 0, 0.8, 0, 1 }, "Rendering :");
         zgui.sameLine(.{});
         zgui.text("{}", .{raytrace.render_running.*});
+        zgui.bullet();
+        zgui.textUnformattedColored(.{ 0, 0.8, 0, 1 }, "Progress :");
+        zgui.sameLine(.{});
+        zgui.text("{d:.2}%", .{100 * current_samples / @as(f32, @floatFromInt(total_samples))});
     }
 
     zgui.end();
