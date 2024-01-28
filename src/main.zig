@@ -31,6 +31,10 @@ const window_title = "zig-gamedev: gui test (wgpu)";
 const embedded_font_data = @embedFile("./FiraCode-Medium.ttf");
 const number_of_threads = 1;
 
+// TODO: Why does it render from dark to lighter, instead of what it was doing before?
+// TODO: Why the threads outputs have different "exposure"?
+// TODO: Should I just use a different buffer structure at this point?
+
 // TODO number of threads not hardcoded?
 // TODO join threads where?
 // TODO remove hittable and hittable_list
@@ -134,8 +138,12 @@ fn bufferToData(allocator: std.mem.Allocator, image_buffer: [][]vec3.Vec4) ![]u8
                 // std.debug.print(" {d} ", .{pixel_component + (4 * current_pixel)});
                 var pixel_value: u8 = 255;
                 if (pixel_component < 3) {
-                    // NOTE: I think this is distorting the colors, not the right approach.
-                    pixel_value = @as(u8, @intFromFloat(@min(255, pixel[pixel_component])));
+                    // TODO find correct way to represent this. What are the actual values here?
+                    // pixel_value = @as(u8, @intFromFloat(@min(255, pixel[pixel_component])));
+                    pixel_value = @as(u8, @intFromFloat(pixel[pixel_component]));
+                    if (pixel[pixel_component] > 255) {
+                        std.debug.print("\n{d}\n", .{pixel[pixel_component]});
+                    }
                 }
                 // std.debug.print(" {d} ", .{pixel_value});
                 data[pixel_component + (4 * current_pixel)] = pixel_value;
