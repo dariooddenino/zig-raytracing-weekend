@@ -111,13 +111,13 @@ fn generateWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hitt
 }
 
 pub fn renderFn(raytrace: *RayTraceState, context: Task) !void {
-    try raytrace.camera.render(context, raytrace.writer, raytrace.render_running);
+    try raytrace.camera.render(context, raytrace);
 }
 
 fn startRender(allocator: std.mem.Allocator, raytrace: *RayTraceState) !void {
     for (0..number_of_threads) |thread_idx| {
         const chunk_size = (raytrace.camera.image_width * raytrace.camera.image_height) / number_of_threads;
-        const task = Task{ .thread_idx = @intCast(thread_idx), .chunk_size = chunk_size, .world = raytrace.world, .camera = raytrace.camera };
+        const task = Task{ .thread_idx = @intCast(thread_idx), .chunk_size = chunk_size };
 
         const thread = try std.Thread.spawn(.{ .allocator = allocator }, renderFn, .{ raytrace, task });
 

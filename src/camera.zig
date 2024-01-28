@@ -16,7 +16,7 @@ const Vec3 = vec3.Vec3;
 const Vec4 = vec3.Vec4;
 
 // TODO move these two to their own file
-pub const Task = struct { thread_idx: u32, chunk_size: u32, world: Hittable, camera: *Camera };
+pub const Task = struct { thread_idx: u32, chunk_size: u32 };
 
 // The buffer stores all lines sequentially.
 pub const SharedStateImageWriter = struct {
@@ -87,7 +87,7 @@ pub const Camera = struct {
     defocus_disk_u: Vec3 = vec3.zero(),
     defocus_disk_v: Vec3 = vec3.zero(),
 
-    pub fn render(self: *Camera, context: Task, writer: SharedStateImageWriter, render_running: *bool) std.fs.File.Writer.Error!void {
+    pub fn render(self: *Camera, context: Task, raytrace: *RayTraceState) std.fs.File.Writer.Error!void {
         std.debug.print("TASK: {any}\n", .{context});
         const start_at = context.thread_idx * context.chunk_size;
         const end_before = start_at + context.chunk_size;
@@ -97,10 +97,10 @@ pub const Camera = struct {
                 const y: u32 = @intCast(@divTrunc(i, self.image_width) + 1);
 
                 const r = self.getRay(x, y);
-                const ray_color = self.rayColor(r, self.max_depth, context.world);
+                const ray_color = self.rayColor(r, self.max_depth, raytrace.world);
                 // TODO I think I will pass this as an arg.
-                try writer.writeColor(i, ray_color, number_of_samples);
-                if (!render_running.*) {
+                try raytrace.writer.writeColor(i, ray_color, number_of_samples);
+                if (!raytrace.render_running.*) {
                     return;
                 }
             }
