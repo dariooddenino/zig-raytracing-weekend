@@ -40,20 +40,11 @@ const number_of_threads = 8;
 // TODO alter camera parameters
 // TODO save to file
 
-// const DemoState = struct {
-//     gctx: *zgpu.GraphicsContext,
-//     texture_view: zgpu.TextureViewHandle,
-//     font_normal: zgui.Font,
-//     font_large: zgui.Font,
-//     draw_list: zgui.DrawList,
-// };
-
 const RayTraceState = struct {
     gctx: *zgpu.GraphicsContext,
     texture_view: zgpu.TextureViewHandle,
     font_normal: zgui.Font,
     font_large: zgui.Font,
-    draw_list: zgui.DrawList,
     camera: *Camera,
     writer: SharedStateImageWriter,
     world: Hittable,
@@ -131,6 +122,7 @@ fn startRender(allocator: std.mem.Allocator, raytrace: *RayTraceState) !void {
 
 // NOTE: I have no fucking clue of how this works...
 fn bufferToData(allocator: std.mem.Allocator, image_buffer: [][]vec3.Vec4) ![]u8 {
+    // std.debug.print("\nTotal size: {d}\n", .{image_buffer.len * image_buffer[0].len * 4});
     const num_columns = image_buffer[0].len;
     const data = try allocator.alloc(u8, image_buffer.len * image_buffer[0].len * 4);
     for (image_buffer, 0..) |row, row_num| {
@@ -139,11 +131,13 @@ fn bufferToData(allocator: std.mem.Allocator, image_buffer: [][]vec3.Vec4) ![]u8
             const current_pixel = pixel_num + (row_num * num_columns);
             // std.debug.print("{d} ", .{pixel_num + (row_num * num_columns)});
             for (0..4) |pixel_component| {
+                // std.debug.print(" {d} ", .{pixel_component + (4 * current_pixel)});
                 var pixel_value: u8 = 255;
                 if (pixel_component < 3) {
                     // NOTE: I think this is distorting the colors, not the right approach.
                     pixel_value = @as(u8, @intFromFloat(@min(255, pixel[pixel_component])));
                 }
+                // std.debug.print(" {d} ", .{pixel_value});
                 data[pixel_component + (4 * current_pixel)] = pixel_value;
             }
         }
@@ -206,8 +200,6 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*RayTraceState {
         plot_style.marker_size = 5.0;
     }
 
-    const draw_list = zgui.createDrawList();
-
     const raytrace = try allocator.create(RayTraceState);
 
     var camera = try allocator.create(Camera);
@@ -227,75 +219,14 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*RayTraceState {
 
     const threads = std.ArrayList(std.Thread).init(allocator);
 
-    // var running = true;
-
-    const image_data = try bufferToData(allocator, writer.buffer);
-
-    const image = zstbi.Image{
-        .data = image_data,
-        .width = camera.image_width,
-        .height = camera.image_height,
-        .num_components = 4,
-        .bytes_per_component = 1,
-        .bytes_per_row = camera.image_width * 4,
-        .is_hdr = false,
-    };
-
-    const texture = gctx.createTexture(.{ .usage = .{ .texture_binding = true, .copy_dst = true }, .size = .{
-        .width = image.width,
-        .height = image.height,
-        .depth_or_array_layers = 1,
-    }, .format = zgpu.imageInfoToTextureFormat(
-        image.num_components,
-        image.bytes_per_component,
-        image.is_hdr,
-    ), .mip_level_count = 1 });
-
-    const texture_view = gctx.createTextureView(texture, .{});
-
-    // var image = try zstbi.Image.loadFromFile(content_dir ++ "test.png", 4);
-    // defer image.deinit();
-
-    // // std.debug.print("\n{any}\n", .{image.data});
-
-    // std.debug.print("\n{d}\n", .{image.data.len});
-
-    // const texture = gctx.createTexture(.{
-    //     .usage = .{ .texture_binding = true, .copy_dst = true },
-    //     .size = .{
-    //         .width = image.width,
-    //         .height = image.height,
-    //         .depth_or_array_layers = 1,
-    //     },
-    //     .format = zgpu.imageInfoToTextureFormat(
-    //         image.num_components,
-    //         image.bytes_per_component,
-    //         image.is_hdr,
-    //     ),
-    //     .mip_level_count = 1,
-    // });
-    // const texture_view = gctx.createTextureView(texture, .{});
-
-    gctx.queue.writeTexture(
-        .{ .texture = gctx.lookupResource(texture).? },
-        .{
-            .bytes_per_row = image.bytes_per_row,
-            .rows_per_image = image.height,
-        },
-        .{ .width = image.width, .height = image.height },
-        u8,
-        image.data,
-    );
-
     const running = try allocator.create(bool);
     running.* = true;
 
     raytrace.* = .{
         .gctx = gctx,
-        .texture_view = texture_view,
+        .texture_view = undefined,
         .font_normal = font_normal,
         .font_large = font_large,
-        .draw_list = draw_list,
         .camera = camera,
         .writer = writer,
         .world = world,
@@ -303,6 +234,8 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*RayTraceState {
         .render_running = running,
         .allocator = allocator,
     };
+
+    try updateTexture(raytrace);
 
     // NOTE: auto start for now
     try startRender(allocator, raytrace);
@@ -313,9 +246,11 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*RayTraceState {
 fn destroy(allocator: std.mem.Allocator, raytrace: *RayTraceState) void {
     zgui.backend.deinit();
     zgui.plot.deinit();
-    zgui.destroyDrawList(raytrace.draw_list);
+    // NOTE: Reusing this drawlist didn't worked, so I removed it. But now I'm not destroying it anywere.
+    // zgui.destroyDrawList(raytrace.draw_list);
     zgui.deinit();
     raytrace.gctx.destroy(allocator);
+    // TODO: I think I should wrap up the threads too here?
     allocator.destroy(raytrace);
 }
 
@@ -337,20 +272,7 @@ fn controlPanel(raytrace: *RayTraceState) !void {
     zgui.end();
 }
 
-fn renderOutput(raytrace: *RayTraceState) !void {
-    _ = raytrace;
-}
-
-fn update(raytrace: *RayTraceState) !void {
-    zgui.backend.newFrame(
-        raytrace.gctx.swapchain_descriptor.width,
-        raytrace.gctx.swapchain_descriptor.height,
-    );
-
-    try controlPanel(raytrace);
-    try renderOutput(raytrace);
-
-    // NOTE: I don't expect this to work, but it's a start.
+fn updateTexture(raytrace: *RayTraceState) !void {
     const image_data = try bufferToData(raytrace.allocator, raytrace.writer.buffer);
 
     const image = zstbi.Image{
@@ -375,6 +297,29 @@ fn update(raytrace: *RayTraceState) !void {
 
     const texture_view = raytrace.gctx.createTextureView(texture, .{});
 
+    // const image = try zstbi.Image.loadFromFile(content_dir ++ "test.png", 4);
+    // // defer image.deinit();
+
+    // std.debug.print("\n{any}\n", .{image.data});
+
+    // std.debug.print("\n{d}\n", .{image.data.len});
+
+    // const texture = raytrace.gctx.createTexture(.{
+    //     .usage = .{ .texture_binding = true, .copy_dst = true },
+    //     .size = .{
+    //         .width = image.width,
+    //         .height = image.height,
+    //         .depth_or_array_layers = 1,
+    //     },
+    //     .format = zgpu.imageInfoToTextureFormat(
+    //         image.num_components,
+    //         image.bytes_per_component,
+    //         image.is_hdr,
+    //     ),
+    //     .mip_level_count = 1,
+    // });
+    // const texture_view = raytrace.gctx.createTextureView(texture, .{});
+
     raytrace.gctx.queue.writeTexture(
         .{ .texture = raytrace.gctx.lookupResource(texture).? },
         .{
@@ -387,6 +332,54 @@ fn update(raytrace: *RayTraceState) !void {
     );
 
     raytrace.texture_view = texture_view;
+}
+
+fn update(raytrace: *RayTraceState) !void {
+    zgui.backend.newFrame(
+        raytrace.gctx.swapchain_descriptor.width,
+        raytrace.gctx.swapchain_descriptor.height,
+    );
+
+    try controlPanel(raytrace);
+    try updateTexture(raytrace);
+
+    // NOTE: I don't expect this to work, but it's a start.
+    // const image_data = try bufferToData(raytrace.allocator, raytrace.writer.buffer);
+
+    // const image = zstbi.Image{
+    //     .data = image_data,
+    //     .width = raytrace.camera.image_width,
+    //     .height = raytrace.camera.image_height,
+    //     .num_components = 4,
+    //     .bytes_per_component = 1,
+    //     .bytes_per_row = raytrace.camera.image_width * 4,
+    //     .is_hdr = false,
+    // };
+
+    // const texture = raytrace.gctx.createTexture(.{ .usage = .{ .texture_binding = true, .copy_dst = true }, .size = .{
+    //     .width = image.width,
+    //     .height = image.height,
+    //     .depth_or_array_layers = 1,
+    // }, .format = zgpu.imageInfoToTextureFormat(
+    //     image.num_components,
+    //     image.bytes_per_component,
+    //     image.is_hdr,
+    // ), .mip_level_count = 1 });
+
+    // const texture_view = raytrace.gctx.createTextureView(texture, .{});
+
+    // raytrace.gctx.queue.writeTexture(
+    //     .{ .texture = raytrace.gctx.lookupResource(texture).? },
+    //     .{
+    //         .bytes_per_row = image.bytes_per_row,
+    //         .rows_per_image = image.height,
+    //     },
+    //     .{ .width = image.width, .height = image.height },
+    //     u8,
+    //     image.data,
+    // );
+
+    // raytrace.texture_view = texture_view;
 
     const tex_id = raytrace.gctx.lookupResource(raytrace.texture_view).?;
     // zgui.image(tex_id, .{ .w = 100.0, .h = 10.0 });
@@ -877,3 +870,34 @@ pub fn main() !void {
         draw(raytrace);
     }
 }
+
+// test "bufferToData" {
+//     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+//     defer _ = gpa.deinit();
+//     var arena_state = std.heap.ArenaAllocator.init(gpa.allocator());
+//     defer arena_state.deinit();
+//     const allocator = arena_state.allocator();
+
+//     const image_width = 5;
+//     const image_height = 3;
+
+//     const image_buffer = try allocator.alloc([]ColorAndSamples, image_width);
+
+//     for (0..image_width) |x| {
+//         image_buffer[x] = try allocator.alloc(ColorAndSamples, image_height);
+//     }
+
+//     for (0..image_width) |x| {
+//         for (0..image_height) |y| {
+//             image_buffer[x][y] = ColorAndSamples{ @floatFromInt(x), @floatFromInt(y), 0, 1 };
+//         }
+//     }
+
+//     const data = try bufferToData(allocator, image_buffer);
+//     defer allocator.free(data);
+//     std.debug.print("{any}\n", .{image_buffer});
+//     std.debug.print("{any}\n", .{data});
+//     // for (data, 0..) |_, i| {
+//     //     expectEqual(data[i], @as(u8, @intCast(i)));
+//     // }
+// }
