@@ -29,11 +29,9 @@ const content_dir = @import("build_options").content_dir;
 const window_title = "zig-gamedev: gui test (wgpu)";
 
 const embedded_font_data = @embedFile("./FiraCode-Medium.ttf");
-const number_of_threads = 1;
+const number_of_threads = 8;
 
-// TODO: Why does it render from dark to lighter, instead of what it was doing before?
-// TODO: Why the threads outputs have different "exposure"?
-// TODO: Should I just use a different buffer structure at this point?
+// TODO progress is wrong, and sometimes it crashes. But it works!
 
 // TODO Should set running to false automatically on end.
 // TODO number of threads not hardcoded?
