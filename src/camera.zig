@@ -51,7 +51,7 @@ pub const SharedStateImageWriter = struct {
 
 pub const Camera = struct {
     aspect_ratio: f32 = 16.0 / 9.0,
-    image_width: u32 = 600,
+    image_width: u32 = 300,
     image_height: u32 = 0,
     size: u32 = undefined,
     center: vec3.Vec3 = undefined,
@@ -72,7 +72,7 @@ pub const Camera = struct {
     defocus_disk_u: Vec3 = vec3.zero(),
     defocus_disk_v: Vec3 = vec3.zero(),
 
-    pub fn render(self: *Camera, context: Task, raytrace: *RayTraceState) std.fs.File.Writer.Error!void {
+    pub fn render(self: *Camera, context: Task, raytrace: *RayTraceState) !void {
         const start_at = context.thread_idx * context.chunk_size;
         const end_before = start_at + context.chunk_size;
         // std.debug.print("TASK: {any}, start: {d}, end: {d}\n", .{ context, start_at, end_before });
@@ -90,6 +90,7 @@ pub const Camera = struct {
                 }
             }
         }
+        try raytrace.threads_running.insert(context.thread_idx, false);
     }
 
     pub fn init(self: *Camera) !void {

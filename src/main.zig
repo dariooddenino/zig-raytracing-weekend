@@ -43,6 +43,9 @@ const number_of_threads = 8;
 // TODO alter camera parameters
 // TODO save to file
 
+TODO threads deve essere una struct che ha il bool running all'interno.
+poi togliere quel threads_running
+
 pub const RayTraceState = struct {
     gctx: *zgpu.GraphicsContext,
     texture_view: zgpu.TextureViewHandle,
@@ -52,9 +55,11 @@ pub const RayTraceState = struct {
     writer: SharedStateImageWriter,
     world: Hittable,
     threads: std.ArrayList(std.Thread),
+    threads_running: std.ArrayList(bool), // Doesn't feel that robust...
     render_running: *bool,
     allocator: std.mem.Allocator,
-    render_start: *?i64 = &null,
+    render_start: *i64,
+    render_end: *i64,
 };
 
 fn generateWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hittable {
@@ -121,8 +126,27 @@ fn startRender(allocator: std.mem.Allocator, raytrace: *RayTraceState) !void {
         const thread = try std.Thread.spawn(.{ .allocator = allocator }, renderFn, .{ raytrace, task });
 
         try raytrace.threads.append(thread);
+        try raytrace.threads_running.insert(thread_idx, true);
     }
-    raytrace.render_start = &std.time.microTimestamp();
+
+    raytrace.render_start.* = std.time.milliTimestamp();
+}
+
+fn shouldStopRender(raytrace: *RayTraceState) !void {
+    var any_thread_running = false;
+    for (raytrace.threads_running.items) |thread_running| {
+        any_thread_running = any_thread_running or thread_running;
+    }
+
+    if (!any_thread_running and raytrace.render_running.*) {
+        std.debug.print("STOPPING RENDERING\n", .{});
+        raytrace.render_running.* = false;
+        raytrace.render_end.* = std.time.milliTimestamp();
+        for (raytrace.threads.items) |thread| {
+            thread.join();
+        }
+        raytrace.threads.clearAndFree();
+    }
 }
 
 fn bufferToData(allocator: std.mem.Allocator, image_buffer: []vec3.Vec4) ![]u8 {
@@ -214,9 +238,16 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*RayTraceState {
     // defer world.deinit();
 
     const threads = std.ArrayList(std.Thread).init(allocator);
+    const threads_running = std.ArrayList(bool).init(allocator);
 
     const running = try allocator.create(bool);
     running.* = true;
+
+    const render_start = try allocator.create(i64);
+    render_start.* = 0;
+
+    const render_end = try allocator.create(i64);
+    render_end.* = 0;
 
     raytrace.* = .{
         .gctx = gctx,
@@ -227,8 +258,11 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*RayTraceState {
         .writer = writer,
         .world = world,
         .threads = threads,
+        .threads_running = threads_running,
         .render_running = running,
         .allocator = allocator,
+        .render_start = render_start,
+        .render_end = render_end,
     };
 
     try updateTexture(raytrace);
@@ -269,7 +303,6 @@ fn controlPanel(raytrace: *RayTraceState) !void {
 
     const current_samples = countSamples(raytrace);
     const total_samples = raytrace.camera.samples_per_pixel * raytrace.writer.buffer.len;
-
     if (zgui.begin("Zig Raytracer", .{})) {
         zgui.bullet();
         zgui.textUnformattedColored(.{ 0, 0.8, 0, 1 }, "Rendering :");
@@ -279,6 +312,36 @@ fn controlPanel(raytrace: *RayTraceState) !void {
         zgui.textUnformattedColored(.{ 0, 0.8, 0, 1 }, "Progress :");
         zgui.sameLine(.{});
         zgui.text("{d:.2}%", .{100 * current_samples / @as(f32, @floatFromInt(total_samples))});
+        const render_start = raytrace.render_start.*;
+        const now = std.time.milliTimestamp();
+        const elapsed = @as(f64, @floatFromInt(now - render_start));
+        zgui.bullet();
+        zgui.textUnformattedColored(.{ 0, 0.8, 0, 1 }, "Elapsed time :");
+        zgui.sameLine(.{});
+        if (raytrace.render_running.*) {
+            zgui.text("{d:.2}s", .{elapsed / 1000});
+        } else {
+            const total = @as(f64, @floatFromInt(raytrace.render_end.* - render_start));
+            zgui.text("{d:.2}s", .{total / 1000});
+        }
+        zgui.bullet();
+        zgui.textUnformattedColored(.{ 0, 0.8, 0, 1 }, "POWER :");
+        zgui.sameLine(.{});
+        if (raytrace.render_running.*) {
+            zgui.text("{d:.0}", .{current_samples / elapsed});
+        } else {
+            const total = @as(f64, @floatFromInt(raytrace.render_end.* - render_start));
+            zgui.textColored(.{ 0.6, 0.6, 0, 1 }, "{d:.0}", .{current_samples / total});
+        }
+
+        for (raytrace.threads_running.items, 0..) |thread_running, i| {
+            if (thread_running) {
+                zgui.bullet();
+                zgui.textColored(.{ 0, 0.8, 0, 1 }, "Thread {d}:", .{i});
+                zgui.sameLine(.{});
+                zgui.text("{}", .{thread_running});
+            }
+        }
     }
 
     zgui.end();
@@ -352,6 +415,7 @@ fn update(raytrace: *RayTraceState) !void {
         raytrace.gctx.swapchain_descriptor.height,
     );
 
+    try shouldStopRender(raytrace);
     try controlPanel(raytrace);
     try updateTexture(raytrace);
 
