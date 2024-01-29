@@ -54,6 +54,7 @@ pub const RayTraceState = struct {
     threads: std.ArrayList(std.Thread),
     render_running: *bool,
     allocator: std.mem.Allocator,
+    render_start: *?i64 = &null,
 };
 
 fn generateWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hittable {
@@ -121,36 +122,8 @@ fn startRender(allocator: std.mem.Allocator, raytrace: *RayTraceState) !void {
 
         try raytrace.threads.append(thread);
     }
+    raytrace.render_start = &std.time.microTimestamp();
 }
-
-// NOTE: I have no fucking clue of how this works...
-// fn bufferToDataz(allocator: std.mem.Allocator, image_buffer: [][]vec3.Vec4) ![]u8 {
-//     // std.debug.print("\nTotal size: {d}\n", .{image_buffer.len * image_buffer[0].len * 4});
-//     const num_columns = image_buffer[0].len;
-//     const data = try allocator.alloc(u8, image_buffer.len * image_buffer[0].len * 4);
-//     for (image_buffer, 0..) |row, row_num| {
-//         // std.debug.print("\nrow: {d}\n", .{row_num});
-//         for (row, 0..) |pixel, pixel_num| {
-//             const current_pixel = pixel_num + (row_num * num_columns);
-//             // std.debug.print("{d} ", .{pixel_num + (row_num * num_columns)});
-//             for (0..4) |pixel_component| {
-//                 // std.debug.print(" {d} ", .{pixel_component + (4 * current_pixel)});
-//                 var pixel_value: u8 = 255;
-//                 if (pixel_component < 3) {
-//                     // TODO find correct way to represent this. What are the actual values here?
-//                     // pixel_value = @as(u8, @intFromFloat(@min(255, pixel[pixel_component])));
-//                     pixel_value = @as(u8, @intFromFloat(pixel[pixel_component]));
-//                     if (pixel[pixel_component] > 255) {
-//                         std.debug.print("\n{d}\n", .{pixel[pixel_component]});
-//                     }
-//                 }
-//                 // std.debug.print(" {d} ", .{pixel_value});
-//                 data[pixel_component + (4 * current_pixel)] = pixel_value;
-//             }
-//         }
-//     }
-//     return data;
-// }
 
 fn bufferToData(allocator: std.mem.Allocator, image_buffer: []vec3.Vec4) ![]u8 {
     const data = try allocator.alloc(u8, image_buffer.len * 4);
@@ -165,7 +138,6 @@ fn bufferToData(allocator: std.mem.Allocator, image_buffer: []vec3.Vec4) ![]u8 {
             data[pixel_component + (4 * pixel_num)] = pixel_value;
         }
     }
-    // std.debug.print("\n{any}\n", .{data});
     return data;
 }
 
