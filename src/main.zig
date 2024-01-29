@@ -154,7 +154,9 @@ fn startRender(allocator: std.mem.Allocator, raytrace: *RayTraceState) !void {
 
 fn bufferToData(allocator: std.mem.Allocator, image_buffer: []vec3.Vec4) ![]u8 {
     const data = try allocator.alloc(u8, image_buffer.len * 4);
-    for (image_buffer, 0..) |pixel, pixel_num| {
+    for (image_buffer, 0..) |ungamma_pixel, pixel_num| {
+        // TODO Nicer name here
+        const pixel = colors.toGamma2(ungamma_pixel);
         for (0..4) |pixel_component| {
             var pixel_value: u8 = 255;
             if (pixel_component < 3) {
@@ -294,7 +296,7 @@ fn controlPanel(raytrace: *RayTraceState) !void {
     defer zgui.popStyleVar(.{ .count = 2 });
 
     const current_samples = countSamples(raytrace);
-    const total_samples = raytrace.camera.samples_per_pixel * raytrace.camera.image_height * raytrace.camera.image_width;
+    const total_samples = raytrace.camera.samples_per_pixel * raytrace.writer.buffer.len;
 
     if (zgui.begin("Zig Raytracer", .{})) {
         zgui.bullet();
@@ -335,12 +337,12 @@ fn updateTexture(raytrace: *RayTraceState) !void {
 
     const texture_view = raytrace.gctx.createTextureView(texture, .{});
 
-    // const image = try zstbi.Image.loadFromFile(content_dir ++ "test.png", 4);
-    // // defer image.deinit();
+    // var image = try zstbi.Image.loadFromFile(content_dir ++ "genart_0025_5.png", 4);
+    // defer image.deinit();
 
-    // std.debug.print("\n{any}\n", .{image.data});
+    // // std.debug.print("\n{any}\n", .{image.data});
 
-    // std.debug.print("\n{d}\n", .{image.data.len});
+    // // std.debug.print("\n{d}\n", .{image.data.len});
 
     // const texture = raytrace.gctx.createTexture(.{
     //     .usage = .{ .texture_binding = true, .copy_dst = true },
@@ -381,46 +383,7 @@ fn update(raytrace: *RayTraceState) !void {
     try controlPanel(raytrace);
     try updateTexture(raytrace);
 
-    // NOTE: I don't expect this to work, but it's a start.
-    // const image_data = try bufferToData(raytrace.allocator, raytrace.writer.buffer);
-
-    // const image = zstbi.Image{
-    //     .data = image_data,
-    //     .width = raytrace.camera.image_width,
-    //     .height = raytrace.camera.image_height,
-    //     .num_components = 4,
-    //     .bytes_per_component = 1,
-    //     .bytes_per_row = raytrace.camera.image_width * 4,
-    //     .is_hdr = false,
-    // };
-
-    // const texture = raytrace.gctx.createTexture(.{ .usage = .{ .texture_binding = true, .copy_dst = true }, .size = .{
-    //     .width = image.width,
-    //     .height = image.height,
-    //     .depth_or_array_layers = 1,
-    // }, .format = zgpu.imageInfoToTextureFormat(
-    //     image.num_components,
-    //     image.bytes_per_component,
-    //     image.is_hdr,
-    // ), .mip_level_count = 1 });
-
-    // const texture_view = raytrace.gctx.createTextureView(texture, .{});
-
-    // raytrace.gctx.queue.writeTexture(
-    //     .{ .texture = raytrace.gctx.lookupResource(texture).? },
-    //     .{
-    //         .bytes_per_row = image.bytes_per_row,
-    //         .rows_per_image = image.height,
-    //     },
-    //     .{ .width = image.width, .height = image.height },
-    //     u8,
-    //     image.data,
-    // );
-
-    // raytrace.texture_view = texture_view;
-
     const tex_id = raytrace.gctx.lookupResource(raytrace.texture_view).?;
-    // zgui.image(tex_id, .{ .w = 100.0, .h = 10.0 });
 
     const draw_list = zgui.getBackgroundDrawList();
     draw_list.addImage(tex_id, .{ .pmin = .{ 30, 30 }, .pmax = .{ @floatFromInt(raytrace.camera.image_width + 30), @floatFromInt(raytrace.camera.image_height + 30) } });

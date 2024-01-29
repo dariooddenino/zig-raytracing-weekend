@@ -39,6 +39,28 @@ pub fn toGamma(pixel_color: ColorAndSamples) vec3.Vec3 {
     return vec3.Vec3{ intensity.clamp(r), intensity.clamp(g), intensity.clamp(b) };
 }
 
+// TODO: test to see what works
+pub fn toGamma2(pixel_color: ColorAndSamples) vec3.Vec3 {
+    const scale = 1.0 / pixel_color[3];
+    var r = pixel_color[0];
+    var g = pixel_color[1];
+    var b = pixel_color[2];
+
+    // Divide the color by the number of samples.
+    r *= scale;
+    g *= scale;
+    b *= scale;
+
+    // Apply the linear to gamma transform
+    r = linearToGamma(r);
+    g = linearToGamma(g);
+    b = linearToGamma(b);
+
+    const intensity = interval.Interval{ .min = 0, .max = 0.999 };
+
+    return vec3.Vec3{ 256 * intensity.clamp(r), 256 * intensity.clamp(g), 256 * intensity.clamp(b) };
+}
+
 pub fn writeColor(stdout: anytype, pixel_color: Color, samples_per_pixel: u16) !void {
     const color_and_samples = ColorAndSamples{ pixel_color[0], pixel_color[1], pixel_color[2], samples_per_pixel };
     const gamma = toGamma(color_and_samples);

@@ -33,16 +33,6 @@ pub const SharedStateImageWriter = struct {
             image_buffer[pos] = ColorAndSamples{ 0, 0, 0, 1 };
         }
 
-        // for (0..image_height) |y| {
-        //     image_buffer[y] = try allocator.alloc(ColorAndSamples, image_width);
-        // }
-
-        // for (0..image_height) |y| {
-        //     for (0..image_width) |x| {
-        //         image_buffer[y][x] = ColorAndSamples{ 0, 0, 0, 1 };
-        //     }
-        // }
-
         return .{ .buffer = image_buffer, .width = image_width, .height = image_height, .allocator = allocator };
     }
 
@@ -54,26 +44,21 @@ pub const SharedStateImageWriter = struct {
     }
 
     pub fn writeColor(self: SharedStateImageWriter, i: usize, col: Vec3, number_of_samples: u64) !void {
-        var pixel_color = Vec4{ col[0], col[1], col[2], 0 };
-        pixel_color[3] = @floatFromInt(number_of_samples);
-        // const position = (y) + ((x) * self.height);
-        self.buffer[i] += pixel_color;
-        // std.debug.print("\nPRINTING: x:{d} col:{any} \n", .{ i, pixel_color });
-        // self.buffer[y][x] += Vec4{ col[0], col[1], col[2], 0 };
-        // self.buffer[y][x][3] = @floatFromInt(number_of_samples);
+        self.buffer[i] += Vec4{ col[0], col[1], col[2], 0 };
+        self.buffer[i][3] = @floatFromInt(number_of_samples);
     }
 };
 
 pub const Camera = struct {
     aspect_ratio: f32 = 16.0 / 9.0,
-    image_width: u32 = 800,
+    image_width: u32 = 600,
     image_height: u32 = 0,
     size: u32 = undefined,
     center: vec3.Vec3 = undefined,
     pixel00_loc: vec3.Vec3 = undefined,
     pixel_delta_u: vec3.Vec3 = undefined,
     pixel_delta_v: vec3.Vec3 = undefined,
-    samples_per_pixel: u16 = 200,
+    samples_per_pixel: u16 = 100,
     max_depth: u8 = 16,
     vfov: f32 = 20,
     lookfrom: vec3.Vec3 = vec3.Vec3{ 13, 2, 3 },
@@ -90,7 +75,7 @@ pub const Camera = struct {
     pub fn render(self: *Camera, context: Task, raytrace: *RayTraceState) std.fs.File.Writer.Error!void {
         const start_at = context.thread_idx * context.chunk_size;
         const end_before = start_at + context.chunk_size;
-        std.debug.print("TASK: {any}, start: {d}, end: {d}\n", .{ context, start_at, end_before });
+        // std.debug.print("TASK: {any}, start: {d}, end: {d}\n", .{ context, start_at, end_before });
         for (1..self.samples_per_pixel + 1) |number_of_samples| {
             for (start_at..end_before) |i| {
                 const x: u32 = @intCast(@mod(i, self.image_width) + 1);
