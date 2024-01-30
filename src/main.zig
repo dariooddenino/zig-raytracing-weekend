@@ -31,10 +31,10 @@ const window_title = "zig-gamedev: gui test (wgpu)";
 const embedded_font_data = @embedFile("./FiraCode-Medium.ttf");
 const number_of_threads = 8;
 
-// TODO number of threads not hardcoded?
-// TODO manual render start
-// TODO display stats
-// TODO alter camera parameters
+// TODO fix progress bar inconsistencies
+// TODO disable controls while rendering
+// TODO alter all camera parameters
+// TODO alter number of threads
 // TODO save to file
 
 pub const RenderThread = struct {
@@ -315,10 +315,6 @@ fn controlPanel(raytrace: *RayTraceState) !void {
         zgui.textUnformattedColored(.{ 0, 0.8, 0, 1 }, "Render running :");
         zgui.sameLine(.{});
         zgui.text("{}", .{raytrace.render_running.*});
-        zgui.bullet();
-        zgui.textUnformattedColored(.{ 0, 0.8, 0, 1 }, "Progress :");
-        zgui.sameLine(.{});
-        zgui.text("{d:.2}%", .{100 * current_samples / @as(f32, @floatFromInt(total_samples))});
         const render_start = raytrace.render_start.*;
         const now = std.time.milliTimestamp();
         const elapsed = @as(f64, @floatFromInt(now - render_start));
@@ -342,6 +338,14 @@ fn controlPanel(raytrace: *RayTraceState) !void {
         }
     }
 
+    zgui.separator();
+    var samples_per_pixel: i32 = raytrace.camera.samples_per_pixel;
+    _ = zgui.sliderInt("Samples", .{ .v = &samples_per_pixel, .min = 10.0, .max = 2000.0 });
+
+    raytrace.camera.samples_per_pixel = @intCast(samples_per_pixel);
+    zgui.separator();
+
+    zgui.progressBar(.{ .fraction = current_samples / @as(f32, @floatFromInt(total_samples)) });
     if (raytrace.render_running.*) {
         if (zgui.button("STOP RENDER", .{ .w = 200.0 })) {
             try stopRender(raytrace);
@@ -353,21 +357,6 @@ fn controlPanel(raytrace: *RayTraceState) !void {
     }
 
     zgui.end();
-
-    // zgui.setNextWindowPos(.{ .x = 20.0, .y = 60.0, .cond = .first_use_ever });
-    // zgui.setNextWindowSize(.{ .w = -1.0, .h = -1.0, .cond = .first_use_ever });
-
-    // if (zgui.begin("Controls", .{})) {
-    //     if (zgui.button("START RENDER", .{ .w = 200.0 })) {
-    //         try startRender(raytrace);
-    //     }
-    //     zgui.sameLine(.{ .spacing = 20.0 });
-    //     if (zgui.button("STOP RENDER", .{ .w = 200.0 })) {
-    //         try stopRender(raytrace);
-    //     }
-    // }
-
-    // zgui.end();
 }
 
 fn updateTexture(raytrace: *RayTraceState) !void {

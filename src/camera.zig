@@ -57,7 +57,7 @@ pub const SharedStateImageWriter = struct {
 
 pub const Camera = struct {
     aspect_ratio: f32 = 16.0 / 9.0,
-    image_width: u32 = 300,
+    image_width: u32 = 800,
     image_height: u32 = 0,
     size: u32 = undefined,
     center: vec3.Vec3 = undefined,
