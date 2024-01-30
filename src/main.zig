@@ -43,8 +43,8 @@ const number_of_threads = 8;
 // TODO alter camera parameters
 // TODO save to file
 
-TODO threads deve essere una struct che ha il bool running all'interno.
-poi togliere quel threads_running
+// TODO threads deve essere una struct che ha il bool running all'interno.
+// poi togliere quel threads_running
 
 pub const RayTraceState = struct {
     gctx: *zgpu.GraphicsContext,
