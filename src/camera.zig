@@ -36,6 +36,12 @@ pub const SharedStateImageWriter = struct {
         return .{ .buffer = image_buffer, .width = image_width, .height = image_height, .allocator = allocator };
     }
 
+    pub fn scrub(self: *SharedStateImageWriter) void {
+        for (0..self.width * self.height) |pos| {
+            self.buffer[pos] = ColorAndSamples{ 0, 0, 0, 1 };
+        }
+    }
+
     pub fn deinit(self: SharedStateImageWriter) void {
         for (0..self.width) |x| {
             self.allocator.free(self.buffer[x]);
@@ -51,15 +57,15 @@ pub const SharedStateImageWriter = struct {
 
 pub const Camera = struct {
     aspect_ratio: f32 = 16.0 / 9.0,
-    image_width: u32 = 800,
+    image_width: u32 = 300,
     image_height: u32 = 0,
     size: u32 = undefined,
     center: vec3.Vec3 = undefined,
     pixel00_loc: vec3.Vec3 = undefined,
     pixel_delta_u: vec3.Vec3 = undefined,
     pixel_delta_v: vec3.Vec3 = undefined,
-    samples_per_pixel: u16 = 800,
-    max_depth: u8 = 20,
+    samples_per_pixel: u16 = 100,
+    max_depth: u8 = 16,
     vfov: f32 = 20,
     lookfrom: vec3.Vec3 = vec3.Vec3{ 13, 2, 3 },
     lookat: vec3.Vec3 = vec3.zero(),
@@ -72,10 +78,11 @@ pub const Camera = struct {
     defocus_disk_u: Vec3 = vec3.zero(),
     defocus_disk_v: Vec3 = vec3.zero(),
 
-    pub fn render(self: *Camera, context: Task, raytrace: *RayTraceState) !void {
+    pub fn render(self: *Camera, raytrace: *RayTraceState, context: Task) !void {
         const start_at = context.thread_idx * context.chunk_size;
         const end_before = start_at + context.chunk_size;
         // std.debug.print("TASK: {any}, start: {d}, end: {d}\n", .{ context, start_at, end_before });
+        // std.debug.print("THREAD: {any}\n", .{raytrace.threads.items[context.thread_idx]});
         for (1..self.samples_per_pixel + 1) |number_of_samples| {
             for (start_at..end_before) |i| {
                 const x: u32 = @intCast(@mod(i, self.image_width) + 1);
@@ -85,12 +92,15 @@ pub const Camera = struct {
                 const ray_color = self.rayColor(r, self.max_depth, raytrace.world);
                 // TODO I think I will pass this as an arg.
                 try raytrace.writer.writeColor(i, ray_color, number_of_samples);
-                if (!raytrace.render_running.*) {
+                if (!raytrace.threads.items[context.thread_idx].running) {
+                    // std.debug.print("RETURNING TASK: {any}\n", .{context});
                     return;
                 }
             }
         }
-        try raytrace.threads_running.insert(context.thread_idx, false);
+        // std.debug.print("ENDING TASK: {any}\n", .{context});
+        // std.debug.print("THREAD: {any}\n", .{raytrace.threads.items[context.thread_idx]});
+        raytrace.threads.items[context.thread_idx].stop();
     }
 
     pub fn init(self: *Camera) !void {

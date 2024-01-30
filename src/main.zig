@@ -31,20 +31,33 @@ const window_title = "zig-gamedev: gui test (wgpu)";
 const embedded_font_data = @embedFile("./FiraCode-Medium.ttf");
 const number_of_threads = 8;
 
-// TODO progress is wrong, and sometimes it crashes. But it works!
-
-// TODO Should set running to false automatically on end.
 // TODO number of threads not hardcoded?
-// TODO join threads where?
-// TODO remove hittable and hittable_list
-// TODO render image to background
 // TODO manual render start
 // TODO display stats
 // TODO alter camera parameters
 // TODO save to file
 
-// TODO threads deve essere una struct che ha il bool running all'interno.
-// poi togliere quel threads_running
+pub const RenderThread = struct {
+    running: bool = false,
+    thread: std.Thread,
+
+    pub fn start(raytrace: *RayTraceState, task: Task) !RenderThread {
+        const thread = try std.Thread.spawn(.{ .allocator = raytrace.allocator }, renderFn, .{ raytrace, task });
+        return RenderThread{ .running = true, .thread = thread };
+    }
+
+    pub fn stop(self: *RenderThread) void {
+        self.running = false;
+    }
+
+    pub fn join(self: *RenderThread) !void {
+        self.thread.join();
+    }
+
+    pub fn renderFn(raytrace: *RayTraceState, task: Task) !void {
+        try raytrace.camera.render(raytrace, task);
+    }
+};
 
 pub const RayTraceState = struct {
     gctx: *zgpu.GraphicsContext,
@@ -54,8 +67,7 @@ pub const RayTraceState = struct {
     camera: *Camera,
     writer: SharedStateImageWriter,
     world: Hittable,
-    threads: std.ArrayList(std.Thread),
-    threads_running: std.ArrayList(bool), // Doesn't feel that robust...
+    threads: std.ArrayList(RenderThread),
     render_running: *bool,
     allocator: std.mem.Allocator,
     render_start: *i64,
@@ -114,38 +126,38 @@ fn generateWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hitt
     return Hittable{ .tree = tree };
 }
 
-pub fn renderFn(raytrace: *RayTraceState, context: Task) !void {
-    try raytrace.camera.render(context, raytrace);
-}
-
-fn startRender(allocator: std.mem.Allocator, raytrace: *RayTraceState) !void {
+fn startRender(raytrace: *RayTraceState) !void {
+    raytrace.writer.scrub();
+    raytrace.render_running.* = true;
     for (0..number_of_threads) |thread_idx| {
         const chunk_size = (raytrace.camera.image_width * raytrace.camera.image_height) / number_of_threads;
         const task = Task{ .thread_idx = @intCast(thread_idx), .chunk_size = chunk_size };
+        const render_thread = try RenderThread.start(raytrace, task);
 
-        const thread = try std.Thread.spawn(.{ .allocator = allocator }, renderFn, .{ raytrace, task });
-
-        try raytrace.threads.append(thread);
-        try raytrace.threads_running.insert(thread_idx, true);
+        try raytrace.threads.append(render_thread);
     }
-
     raytrace.render_start.* = std.time.milliTimestamp();
+}
+
+fn stopRender(raytrace: *RayTraceState) !void {
+    raytrace.render_running.* = false;
+    raytrace.render_end.* = std.time.milliTimestamp();
+    for (raytrace.threads.items) |*thread| {
+        thread.stop(); // Stopping both here and at the thread level, shouldn't be a problem.
+        try thread.join();
+    }
+    raytrace.threads.clearAndFree();
 }
 
 fn shouldStopRender(raytrace: *RayTraceState) !void {
     var any_thread_running = false;
-    for (raytrace.threads_running.items) |thread_running| {
-        any_thread_running = any_thread_running or thread_running;
+    for (raytrace.threads.items) |thread| {
+        any_thread_running = any_thread_running or thread.running;
     }
 
     if (!any_thread_running and raytrace.render_running.*) {
-        std.debug.print("STOPPING RENDERING\n", .{});
-        raytrace.render_running.* = false;
-        raytrace.render_end.* = std.time.milliTimestamp();
-        for (raytrace.threads.items) |thread| {
-            thread.join();
-        }
-        raytrace.threads.clearAndFree();
+        // std.debug.print("should stop\n", .{});
+        try stopRender(raytrace);
     }
 }
 
@@ -237,11 +249,10 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*RayTraceState {
     const world = try generateWorld(allocator, &world_objects);
     // defer world.deinit();
 
-    const threads = std.ArrayList(std.Thread).init(allocator);
-    const threads_running = std.ArrayList(bool).init(allocator);
+    const threads = std.ArrayList(RenderThread).init(allocator);
 
     const running = try allocator.create(bool);
-    running.* = true;
+    running.* = false;
 
     const render_start = try allocator.create(i64);
     render_start.* = 0;
@@ -258,7 +269,6 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*RayTraceState {
         .writer = writer,
         .world = world,
         .threads = threads,
-        .threads_running = threads_running,
         .render_running = running,
         .allocator = allocator,
         .render_start = render_start,
@@ -266,9 +276,6 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*RayTraceState {
     };
 
     try updateTexture(raytrace);
-
-    // NOTE: auto start for now
-    try startRender(allocator, raytrace);
 
     return raytrace;
 }
@@ -303,9 +310,9 @@ fn controlPanel(raytrace: *RayTraceState) !void {
 
     const current_samples = countSamples(raytrace);
     const total_samples = raytrace.camera.samples_per_pixel * raytrace.writer.buffer.len;
-    if (zgui.begin("Zig Raytracer", .{})) {
+    if (zgui.begin("HooRay", .{})) {
         zgui.bullet();
-        zgui.textUnformattedColored(.{ 0, 0.8, 0, 1 }, "Rendering :");
+        zgui.textUnformattedColored(.{ 0, 0.8, 0, 1 }, "Render running :");
         zgui.sameLine(.{});
         zgui.text("{}", .{raytrace.render_running.*});
         zgui.bullet();
@@ -333,18 +340,34 @@ fn controlPanel(raytrace: *RayTraceState) !void {
             const total = @as(f64, @floatFromInt(raytrace.render_end.* - render_start));
             zgui.textColored(.{ 0.6, 0.6, 0, 1 }, "{d:.0}", .{current_samples / total});
         }
+    }
 
-        for (raytrace.threads_running.items, 0..) |thread_running, i| {
-            if (thread_running) {
-                zgui.bullet();
-                zgui.textColored(.{ 0, 0.8, 0, 1 }, "Thread {d}:", .{i});
-                zgui.sameLine(.{});
-                zgui.text("{}", .{thread_running});
-            }
+    if (raytrace.render_running.*) {
+        if (zgui.button("STOP RENDER", .{ .w = 200.0 })) {
+            try stopRender(raytrace);
+        }
+    } else {
+        if (zgui.button("START RENDER", .{ .w = 200.0 })) {
+            try startRender(raytrace);
         }
     }
 
     zgui.end();
+
+    // zgui.setNextWindowPos(.{ .x = 20.0, .y = 60.0, .cond = .first_use_ever });
+    // zgui.setNextWindowSize(.{ .w = -1.0, .h = -1.0, .cond = .first_use_ever });
+
+    // if (zgui.begin("Controls", .{})) {
+    //     if (zgui.button("START RENDER", .{ .w = 200.0 })) {
+    //         try startRender(raytrace);
+    //     }
+    //     zgui.sameLine(.{ .spacing = 20.0 });
+    //     if (zgui.button("STOP RENDER", .{ .w = 200.0 })) {
+    //         try stopRender(raytrace);
+    //     }
+    // }
+
+    // zgui.end();
 }
 
 fn updateTexture(raytrace: *RayTraceState) !void {
@@ -371,29 +394,6 @@ fn updateTexture(raytrace: *RayTraceState) !void {
     ), .mip_level_count = 1 });
 
     const texture_view = raytrace.gctx.createTextureView(texture, .{});
-
-    // var image = try zstbi.Image.loadFromFile(content_dir ++ "genart_0025_5.png", 4);
-    // defer image.deinit();
-
-    // // std.debug.print("\n{any}\n", .{image.data});
-
-    // // std.debug.print("\n{d}\n", .{image.data.len});
-
-    // const texture = raytrace.gctx.createTexture(.{
-    //     .usage = .{ .texture_binding = true, .copy_dst = true },
-    //     .size = .{
-    //         .width = image.width,
-    //         .height = image.height,
-    //         .depth_or_array_layers = 1,
-    //     },
-    //     .format = zgpu.imageInfoToTextureFormat(
-    //         image.num_components,
-    //         image.bytes_per_component,
-    //         image.is_hdr,
-    //     ),
-    //     .mip_level_count = 1,
-    // });
-    // const texture_view = raytrace.gctx.createTextureView(texture, .{});
 
     raytrace.gctx.queue.writeTexture(
         .{ .texture = raytrace.gctx.lookupResource(texture).? },
@@ -422,7 +422,7 @@ fn update(raytrace: *RayTraceState) !void {
     const tex_id = raytrace.gctx.lookupResource(raytrace.texture_view).?;
 
     const draw_list = zgui.getBackgroundDrawList();
-    draw_list.addImage(tex_id, .{ .pmin = .{ 30, 30 }, .pmax = .{ @floatFromInt(raytrace.camera.image_width + 30), @floatFromInt(raytrace.camera.image_height + 30) } });
+    draw_list.addImage(tex_id, .{ .pmin = .{ 20, 20 }, .pmax = .{ @floatFromInt(raytrace.camera.image_width + 20), @floatFromInt(raytrace.camera.image_height + 20) } });
 }
 
 // fn updatez(demo: *DemoState) !void {
