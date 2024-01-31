@@ -84,7 +84,7 @@ fn generateWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hitt
         var b: f32 = -11;
         while (b < 11) : (b += 1) {
             const choose_mat = rtweekend.randomDouble();
-            const center = Vec3{ a + 0.9 * rtweekend.randomDouble(), 0.2, b + 0.9 * rtweekend.randomDouble() };
+            const center = Vec3{ a + 0.9 * rtweekend.randomDouble(), 0.4 * choose_mat, b + 0.9 * rtweekend.randomDouble() };
 
             if (vec3.length(center - Vec3{ 4, 0.2, 0 }) > 0.9) {
                 // TODO: this was a shared_ptr, not entirely sure why and how to replicate.
@@ -94,19 +94,19 @@ fn generateWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hitt
                     // diffuse
                     const albedo = vec3.random() * vec3.random();
                     const sphere_material = Material{ .lambertian = materials.Lambertian.fromColor(albedo) };
-                    const center2 = center + Vec3{ 0, rtweekend.randomDoubleRange(0, 0.5), 0 };
-                    const spherei = Sphere.initMoving(center, center2, 0.2, sphere_material);
+                    const center2 = center + Vec3{ rtweekend.randomDoubleRange(0, 0.5), rtweekend.randomDoubleRange(0, 0.5), rtweekend.randomDoubleRange(0, 0.5) };
+                    const spherei = Sphere.initMoving(center, center2, 0.4 * choose_mat, sphere_material);
                     try world_objects.append(spherei);
                 } else if (choose_mat < 0.95) {
                     // metal
                     const albedo = vec3.randomRange(0.5, 1);
                     const fuzz = rtweekend.randomDoubleRange(0, 0.5);
                     const sphere_material = Material{ .metal = materials.Metal.fromColor(albedo, fuzz) };
-                    try world_objects.append(Sphere.init(center, 0.2, sphere_material));
+                    try world_objects.append(Sphere.init(center, 0.5 * choose_mat, sphere_material));
                 } else {
                     // glass
-                    const sphere_material = Material{ .dielectric = materials.Dielectric{ .ir = 1.5 } };
-                    try world_objects.append(Sphere.init(center, 0.2, sphere_material));
+                    const sphere_material = Material{ .dielectric = materials.Dielectric{ .ir = rtweekend.randomDoubleRange(1, 2) } };
+                    try world_objects.append(Sphere.init(center, 0.3 * choose_mat, sphere_material));
                 }
             }
         }
