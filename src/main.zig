@@ -129,8 +129,9 @@ fn generateWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hitt
 fn startRender(raytrace: *RayTraceState) !void {
     raytrace.writer.scrub();
     raytrace.render_running.* = true;
+    try raytrace.camera.init(); // Reinitialize with new params.
     for (0..number_of_threads) |thread_idx| {
-        const chunk_size = (raytrace.camera.image_width * raytrace.camera.image_height) / number_of_threads;
+        const chunk_size = raytrace.camera.size / number_of_threads;
         const task = Task{ .thread_idx = @intCast(thread_idx), .chunk_size = chunk_size };
         const render_thread = try RenderThread.start(raytrace, task);
 
@@ -340,9 +341,39 @@ fn controlPanel(raytrace: *RayTraceState) !void {
 
     zgui.separator();
     var samples_per_pixel: i32 = raytrace.camera.samples_per_pixel;
-    _ = zgui.sliderInt("Samples", .{ .v = &samples_per_pixel, .min = 10.0, .max = 2000.0 });
+    var max_depth: i32 = raytrace.camera.max_depth;
+    var vfov: f32 = raytrace.camera.vfov;
+    var defocus_angle: f32 = raytrace.camera.defocus_angle;
+    var focus_dist: f32 = raytrace.camera.focus_dist;
+    var look_from_x: f32 = raytrace.camera.lookfrom[0];
+    var look_from_y: f32 = raytrace.camera.lookfrom[1];
+    var look_from_z: f32 = raytrace.camera.lookfrom[2];
 
-    raytrace.camera.samples_per_pixel = @intCast(samples_per_pixel);
+    // NOTE: if I update the width I have to recreate the texture with the new image buffer.
+    // This is going to be a bit tricky.
+    // var width: i32 = raytrace.camera.image_width;
+    // _ = zgui.sliderInt("Width", .{ .v = &width, .min = 50, .max = 1920 });
+    _ = zgui.sliderInt("Samples", .{ .v = &samples_per_pixel, .min = 10, .max = 2000 });
+    _ = zgui.sliderInt("Max depth", .{ .v = &max_depth, .min = 1, .max = 200 });
+    _ = zgui.sliderFloat("vFOV", .{ .v = &vfov, .min = 1, .max = 90.0 });
+    _ = zgui.sliderFloat("Defocus angle", .{ .v = &defocus_angle, .min = 0.1, .max = 15.0 });
+    _ = zgui.sliderFloat("Focus dist", .{ .v = &focus_dist, .min = 0.1, .max = 30 });
+    _ = zgui.sliderFloat("Look from x", .{ .v = &look_from_x, .min = 0.1, .max = 20 });
+    _ = zgui.sliderFloat("Look from y", .{ .v = &look_from_y, .min = 0.1, .max = 20 });
+    _ = zgui.sliderFloat("Look from z", .{ .v = &look_from_z, .min = 0.1, .max = 20 });
+
+    if (!raytrace.render_running.*) {
+        raytrace.camera.samples_per_pixel = @intCast(samples_per_pixel);
+        raytrace.camera.max_depth = @intCast(max_depth);
+        raytrace.camera.vfov = vfov;
+        raytrace.camera.focus_dist = focus_dist;
+        raytrace.camera.defocus_angle = defocus_angle;
+        raytrace.camera.lookfrom = Vec3{ look_from_x, look_from_y, look_from_z };
+        // if (raytrace.camera.image_width != width) {
+        //     raytrace.camera.image_width = @intCast(width);
+        //     raytrace.camera.image_height = 0;
+        // }
+    }
     zgui.separator();
 
     zgui.progressBar(.{ .fraction = current_samples / @as(f32, @floatFromInt(total_samples)) });

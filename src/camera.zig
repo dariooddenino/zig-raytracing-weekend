@@ -57,8 +57,8 @@ pub const SharedStateImageWriter = struct {
 
 pub const Camera = struct {
     aspect_ratio: f32 = 16.0 / 9.0,
-    image_width: u32 = 800,
-    image_height: u32 = 0,
+    image_width: u16 = 800,
+    image_height: u16 = 0,
     size: u32 = undefined,
     center: vec3.Vec3 = undefined,
     pixel00_loc: vec3.Vec3 = undefined,
@@ -108,7 +108,7 @@ pub const Camera = struct {
             self.image_height = @intFromFloat(@round(toFloat(self.image_width) / self.aspect_ratio));
         if (self.image_height < 1) self.image_height = 1;
 
-        self.size = self.image_height * self.image_width;
+        self.size = @as(u32, @intCast(self.image_height)) * @as(u32, @intCast(self.image_width));
         self.center = self.lookfrom;
 
         // Determine viewport dimensions.
