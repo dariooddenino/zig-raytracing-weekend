@@ -86,6 +86,22 @@ pub const Sphere = struct {
         return self.center1 + vec3.splat3(time) * self.center_vec;
     }
 
+    // NOTE This name is misleading
+    fn getSphereUV(p: Vec3, u: *f32, v: *f32) void {
+        // p: a given point on the sphere of radius one, centered at the origin.
+        // u: returned value [0,1] of angle around the Y axis from X=-1.
+        // v: returned value [0,1] of angle from Y=-1 to Y=+1.
+        //     <1 0 0> yields <0.50 0.50>       <-1  0  0> yields <0.00 0.50>
+        //     <0 1 0> yields <0.50 1.00>       < 0 -1  0> yields <0.50 0.00>
+        //     <0 0 1> yields <0.25 0.50>       < 0  0 -1> yields <0.75 0.50>
+
+        const theta = std.math.acos(-p[1]);
+        const phi = std.math.atan2(f32, -p[2], p[0]) + std.math.pi;
+
+        u.* = phi / (2 * std.math.pi);
+        v.* = theta / std.math.pi;
+    }
+
     pub fn hit(
         self: Sphere,
         r: Ray,
@@ -114,6 +130,7 @@ pub const Sphere = struct {
         rec.p = r.at(rec.t);
         const outward_normal = (rec.p - center) / vec3.splat3(self.radius);
         rec.setFaceNormal(r, outward_normal);
+        getSphereUV(outward_normal, &rec.u, &rec.v);
         rec.mat = self.mat;
 
         return rec;

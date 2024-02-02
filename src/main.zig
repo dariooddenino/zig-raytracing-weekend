@@ -78,6 +78,20 @@ pub const RayTraceState = struct {
     render_end: *i64,
 };
 
+fn twoSpheresWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hittable {
+    const checker_black = SolidColor.init(Vec3{ 0.2, 0.3, 0.1 });
+    const checker_white = SolidColor.init(Vec3{ 0.9, 0.9, 0.9 });
+    const checker = CheckerTexture.init(0.8, checker_black, checker_white);
+    const material = Material{ .lambertian = materials.Lambertian.init(Texture{ .checker_texture = checker }) };
+
+    try world_objects.append(Sphere.init(Vec3{ 0, -10, 0 }, 10, material));
+    try world_objects.append(Sphere.init(Vec3{ 0, 10, 0 }, 10, material));
+
+    const tree = try BVHTree.init(allocator, world_objects.items, 0, world_objects.items.len);
+
+    return Hittable{ .tree = tree };
+}
+
 fn generateWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hittable {
 
     // NOTE Maybe I should make this pointers.
@@ -242,7 +256,8 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*RayTraceState {
     var world_objects = ObjectList.init(allocator);
     // defer world_objects.deinit();
 
-    const world = try generateWorld(allocator, &world_objects);
+    const world = try twoSpheresWorld(allocator, &world_objects);
+    // const world = try generateWorld(allocator, &world_objects);
     // defer world.deinit();
 
     const threads = std.ArrayList(RenderThread).init(allocator);
@@ -352,10 +367,10 @@ fn controlPanel(raytrace: *RayTraceState) !void {
     _ = zgui.sliderInt("Max depth", .{ .v = &max_depth, .min = 1, .max = 200 });
     _ = zgui.sliderFloat("vFOV", .{ .v = &vfov, .min = 1, .max = 90.0 });
     _ = zgui.sliderFloat("Defocus angle", .{ .v = &defocus_angle, .min = 0.1, .max = 15.0 });
-    _ = zgui.sliderFloat("Focus dist", .{ .v = &focus_dist, .min = 0.1, .max = 30 });
-    _ = zgui.sliderFloat("Look from x", .{ .v = &look_from_x, .min = 0.1, .max = 20 });
-    _ = zgui.sliderFloat("Look from y", .{ .v = &look_from_y, .min = 0.1, .max = 20 });
-    _ = zgui.sliderFloat("Look from z", .{ .v = &look_from_z, .min = 0.1, .max = 20 });
+    _ = zgui.sliderFloat("Focus dist", .{ .v = &focus_dist, .min = 0.1, .max = 80 });
+    _ = zgui.sliderFloat("Look from x", .{ .v = &look_from_x, .min = 1, .max = 40 });
+    _ = zgui.sliderFloat("Look from y", .{ .v = &look_from_y, .min = 1, .max = 40 });
+    _ = zgui.sliderFloat("Look from z", .{ .v = &look_from_z, .min = 1, .max = 40 });
 
     if (!raytrace.render_running.*) {
         raytrace.camera.samples_per_pixel = @intCast(samples_per_pixel);
