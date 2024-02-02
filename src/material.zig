@@ -3,6 +3,10 @@ const rtweekend = @import("rtweekend.zig");
 const vec3 = @import("vec3.zig");
 const ray = @import("ray.zig");
 const objects = @import("objects.zig");
+const textures = @import("textures.zig");
+
+const Texture = textures.Texture;
+const SolidColor = textures.SolidColor;
 
 pub const Material = union(enum) {
     lambertian: Lambertian,
@@ -17,10 +21,14 @@ pub const Material = union(enum) {
 };
 
 pub const Lambertian = struct {
-    albedo: vec3.Vec3,
+    albedo: Texture,
+
+    pub fn init(texture: Texture) Lambertian {
+        return Lambertian{ .albedo = texture };
+    }
 
     pub fn fromColor(color: vec3.Vec3) Lambertian {
-        return Lambertian{ .albedo = color };
+        return Lambertian{ .albedo = Texture{ .solid_color = SolidColor.init(color) } };
     }
 
     pub fn scatter(self: Lambertian, r_in: ray.Ray, rec: objects.HitRecord, attenuation: *vec3.Vec3, scattered: *ray.Ray) bool {
@@ -32,7 +40,7 @@ pub const Lambertian = struct {
         }
 
         scattered.* = ray.Ray{ .origin = rec.p, .direction = scatter_direction, .time = r_in.time };
-        attenuation.* = self.albedo;
+        attenuation.* = self.albedo.value(rec.u, rec.v, rec.p);
         return true;
     }
 };

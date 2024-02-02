@@ -18,6 +18,8 @@ pub const HitRecord = struct {
     normal: Vec3 = vec3.zero(),
     mat: Material = undefined, // NOTE was a pointer
     t: f32 = 0,
+    u: f32 = 0,
+    v: f32 = 0,
     front_face: bool = false,
 
     pub fn setFaceNormal(self: *HitRecord, r: Ray, outward_normal: Vec3) void {

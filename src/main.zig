@@ -13,14 +13,18 @@ const materials = @import("material.zig");
 const vec3 = @import("vec3.zig");
 const rtweekend = @import("rtweekend.zig");
 const bvh = @import("bvh.zig");
+const textures = @import("textures.zig");
 
 const BVHTree = bvh.BVHTree;
 const Camera = cameras.Camera;
+const CheckerTexture = textures.CheckerTexture;
 const ColorAndSamples = colors.ColorAndSamples;
 const Hittable = objects.Hittable;
 const Material = materials.Material;
 const ObjectList = std.ArrayList(Hittable);
 const SharedStateImageWriter = cameras.SharedStateImageWriter;
+const SolidColor = textures.SolidColor;
+const Texture = textures.Texture;
 const Sphere = objects.Sphere;
 const Task = cameras.Task;
 const Vec3 = vec3.Vec3;
@@ -75,8 +79,15 @@ pub const RayTraceState = struct {
 };
 
 fn generateWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hittable {
-    const ground_material = Material{ .lambertian = materials.Lambertian.fromColor(Vec3{ 0.5, 0.5, 0.5 }) };
-    const ground = Sphere.init(vec3.Vec3{ 0, -1000, -1 }, 1000, ground_material);
+
+    // NOTE Maybe I should make this pointers.
+    // NOTE Should allocate and free?
+    const checker_black = SolidColor.init(Vec3{ 0.2, 0.3, 0.1 });
+    const checker_white = SolidColor.init(Vec3{ 0.9, 0.9, 0.9 });
+    const checker = CheckerTexture.init(0.32, checker_black, checker_white);
+    const ground_material = Material{ .lambertian = materials.Lambertian.init((Texture{ .checker_texture = checker })) };
+
+    const ground = Sphere.init(vec3.Vec3{ 0, -1000, 0 }, 1000, ground_material);
     try world_objects.append(ground);
 
     var a: f32 = -11;
