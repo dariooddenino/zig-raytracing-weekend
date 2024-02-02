@@ -14,12 +14,14 @@ const vec3 = @import("vec3.zig");
 const rtweekend = @import("rtweekend.zig");
 const bvh = @import("bvh.zig");
 const textures = @import("textures.zig");
+const RtwImage = @import("rtw_image.zig").RtwImage;
 
 const BVHTree = bvh.BVHTree;
 const Camera = cameras.Camera;
 const CheckerTexture = textures.CheckerTexture;
 const ColorAndSamples = colors.ColorAndSamples;
 const Hittable = objects.Hittable;
+const ImageTexture = textures.ImageTexture;
 const Material = materials.Material;
 const ObjectList = std.ArrayList(Hittable);
 const SharedStateImageWriter = cameras.SharedStateImageWriter;
@@ -77,6 +79,23 @@ pub const RayTraceState = struct {
     render_start: *i64,
     render_end: *i64,
 };
+
+fn earthWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hittable {
+    const earth_texture = try ImageTexture.init(allocator, "earthmap.jpg");
+    // TODO try defer earth_texture: how does it work?
+    defer earth_texture.deinit();
+    // defer earth_texture.deinit() catch |err| {
+    //     _ = err;
+    // };
+    const earth_surface = Material{ .lambertian = materials.Lambertian.init(earth_texture) };
+    const globe = Sphere.init(Vec3{ 0, 0, 0 }, 2, earth_surface);
+
+    try world_objects.append(globe);
+
+    const tree = try BVHTree.init(allocator, world_objects.items, 0, world_objects.items.len);
+
+    return Hittable{ .tree = tree };
+}
 
 fn twoSpheresWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hittable {
     const checker_black = SolidColor.init(Vec3{ 0.2, 0.3, 0.1 });
@@ -256,8 +275,9 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*RayTraceState {
     var world_objects = ObjectList.init(allocator);
     // defer world_objects.deinit();
 
-    const world = try twoSpheresWorld(allocator, &world_objects);
-    // const world = try generateWorld(allocator, &world_objects);
+    // const world = try earthWorld(allocator, &world_objects);
+    // const world = try twoSpheresWorld(allocator, &world_objects);
+    const world = try generateWorld(allocator, &world_objects);
     // defer world.deinit();
 
     const threads = std.ArrayList(RenderThread).init(allocator);
