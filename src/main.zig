@@ -162,22 +162,6 @@ fn shouldStopRender(raytrace: *RayTraceState) !void {
     }
 }
 
-fn bufferToData(allocator: std.mem.Allocator, image_buffer: []vec3.Vec4) ![]u8 {
-    const data = try allocator.alloc(u8, image_buffer.len * 4);
-    for (image_buffer, 0..) |ungamma_pixel, pixel_num| {
-        // TODO Nicer name here
-        const pixel = colors.toGamma2(ungamma_pixel);
-        for (0..4) |pixel_component| {
-            var pixel_value: u8 = 255;
-            if (pixel_component < 3) {
-                pixel_value = @as(u8, @intFromFloat(pixel[pixel_component]));
-            }
-            data[pixel_component + (4 * pixel_num)] = pixel_value;
-        }
-    }
-    return data;
-}
-
 fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*RayTraceState {
     const gctx = try zgpu.GraphicsContext.create(allocator, window, .{});
     errdefer gctx.destroy(allocator);
@@ -391,7 +375,8 @@ fn controlPanel(raytrace: *RayTraceState) !void {
 }
 
 fn updateTexture(raytrace: *RayTraceState) !void {
-    const image_data = try bufferToData(raytrace.allocator, raytrace.writer.buffer);
+    // const image_data = try raytrace.writer.updateAndGetTextureBuffer();
+    const image_data = raytrace.writer.texture_buffer;
 
     const image = zstbi.Image{
         .data = image_data,

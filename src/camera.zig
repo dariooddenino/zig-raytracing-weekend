@@ -21,6 +21,7 @@ pub const Task = struct { thread_idx: u32, chunk_size: u32 };
 // The buffer stores all lines sequentially.
 pub const SharedStateImageWriter = struct {
     buffer: []ColorAndSamples,
+    texture_buffer: []u8,
     width: u32,
     height: u32,
     allocator: std.mem.Allocator,
@@ -28,12 +29,13 @@ pub const SharedStateImageWriter = struct {
     pub fn init(allocator: std.mem.Allocator, image_width: u32, image_height: u32) !SharedStateImageWriter {
         const size = image_height * image_width;
         const image_buffer = try allocator.alloc(ColorAndSamples, size);
+        const texture_buffer = try allocator.alloc(u8, image_buffer.len * 4);
 
         for (0..size) |pos| {
             image_buffer[pos] = ColorAndSamples{ 0, 0, 0, 1 };
         }
 
-        return .{ .buffer = image_buffer, .width = image_width, .height = image_height, .allocator = allocator };
+        return .{ .buffer = image_buffer, .texture_buffer = texture_buffer, .width = image_width, .height = image_height, .allocator = allocator };
     }
 
     pub fn scrub(self: *SharedStateImageWriter) void {
@@ -52,6 +54,15 @@ pub const SharedStateImageWriter = struct {
     pub fn writeColor(self: SharedStateImageWriter, i: usize, col: Vec3, number_of_samples: u64) !void {
         self.buffer[i] += Vec4{ col[0], col[1], col[2], 0 };
         self.buffer[i][3] = @floatFromInt(number_of_samples);
+        // Update the texture_buffer too.
+        const gamma_col = color.toGamma2(self.buffer[i]);
+        for (0..4) |pixel_component| {
+            var pixel_value: u8 = 255;
+            if (pixel_component < 3) {
+                pixel_value = @as(u8, @intFromFloat(gamma_col[pixel_component]));
+            }
+            self.texture_buffer[pixel_component + (4 * i)] = pixel_value;
+        }
     }
 };
 
