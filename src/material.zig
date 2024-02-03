@@ -28,7 +28,7 @@ pub const Lambertian = struct {
     }
 
     pub fn fromColor(color: vec3.Vec3) Lambertian {
-        return Lambertian{ .albedo = Texture{ .solid_color = SolidColor.init(color) } };
+        return Lambertian{ .albedo = SolidColor.init(color) };
     }
 
     pub fn scatter(self: Lambertian, r_in: ray.Ray, rec: objects.HitRecord, attenuation: *vec3.Vec3, scattered: *ray.Ray) bool {

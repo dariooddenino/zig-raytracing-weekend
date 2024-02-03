@@ -26,8 +26,8 @@ pub const Texture = union(enum) {
 pub const SolidColor = struct {
     color_value: Vec3,
 
-    pub fn init(color: Vec3) SolidColor {
-        return SolidColor{ .color_value = color };
+    pub fn init(color: Vec3) Texture {
+        return Texture{ .solid_color = SolidColor{ .color_value = color } };
     }
 
     pub fn deinit(_: SolidColor) void {}
@@ -47,9 +47,9 @@ pub const CheckerTexture = struct {
     even: SolidColor,
     odd: SolidColor,
 
-    pub fn init(scale: f32, even: SolidColor, odd: SolidColor) CheckerTexture {
+    pub fn init(scale: f32, even: SolidColor, odd: SolidColor) Texture {
         // even and oddhad a make_shared call
-        return CheckerTexture{ .inv_scale = 1.0 / scale, .even = even, .odd = odd };
+        return Texture{ .checker_texture = CheckerTexture{ .inv_scale = 1.0 / scale, .even = even, .odd = odd } };
     }
 
     pub fn deinit(_: CheckerTexture) void {}

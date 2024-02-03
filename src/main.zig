@@ -117,8 +117,8 @@ fn generateWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hitt
     // NOTE Should allocate and free?
     const checker_black = SolidColor.init(Vec3{ 0.2, 0.3, 0.1 });
     const checker_white = SolidColor.init(Vec3{ 0.9, 0.9, 0.9 });
-    const checker = CheckerTexture.init(0.32, checker_black, checker_white);
-    const ground_material = Material{ .lambertian = materials.Lambertian.init((Texture{ .checker_texture = checker })) };
+    const checker = CheckerTexture.init(0.32, checker_black.solid_color, checker_white.solid_color);
+    const ground_material = Material{ .lambertian = materials.Lambertian.init(checker) };
 
     const ground = Sphere.init(vec3.Vec3{ 0, -1000, 0 }, 1000, ground_material);
     try world_objects.append(ground);
