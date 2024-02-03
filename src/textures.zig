@@ -3,6 +3,7 @@ const vec3 = @import("vec3.zig");
 const RtwImage = @import("rtw_image.zig").RtwImage;
 const Interval = @import("interval.zig").Interval;
 const zstbi = @import("zstbi");
+const Perlin = @import("perlin.zig").Perlin;
 
 const Vec3 = vec3.Vec3;
 
@@ -10,6 +11,7 @@ pub const Texture = union(enum) {
     solid_color: SolidColor,
     checker_texture: CheckerTexture,
     image_texture: ImageTexture,
+    noise_texture: NoiseTexture,
 
     pub fn deinit(self: Texture) void {
         switch (self) {
@@ -99,5 +101,21 @@ pub const ImageTexture = struct {
 
         const color_scale: f32 = 1.0 / 255.0;
         return Vec3{ color_scale * @as(f32, @floatFromInt(pixel[0])), color_scale * @as(f32, @floatFromInt(pixel[1])), color_scale * @as(f32, @floatFromInt(pixel[2])) };
+    }
+};
+
+pub const NoiseTexture = struct {
+    noise: Perlin,
+    scale: f32,
+
+    pub fn init(scale: f32) Texture {
+        const perlin = Perlin.init();
+        return Texture{ .noise_texture = NoiseTexture{ .noise = perlin, .scale = scale } };
+    }
+
+    pub fn deinit(_: NoiseTexture) void {}
+
+    pub fn value(self: NoiseTexture, _: f32, _: f32, p: Vec3) Vec3 {
+        return Vec3{ 1, 1, 1 } * vec3.splat3(self.noise.noise(vec3.splat3(self.scale) * p));
     }
 };

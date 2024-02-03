@@ -23,6 +23,7 @@ const ColorAndSamples = colors.ColorAndSamples;
 const Hittable = objects.Hittable;
 const ImageTexture = textures.ImageTexture;
 const Material = materials.Material;
+const NoiseTexture = textures.NoiseTexture;
 const ObjectList = std.ArrayList(Hittable);
 const SharedStateImageWriter = cameras.SharedStateImageWriter;
 const SolidColor = textures.SolidColor;
@@ -102,6 +103,18 @@ fn twoSpheresWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hi
 
     try world_objects.append(Sphere.init(Vec3{ 0, -10, 0 }, 10, material));
     try world_objects.append(Sphere.init(Vec3{ 0, 10, 0 }, 10, material));
+
+    const tree = try BVHTree.init(allocator, world_objects.items, 0, world_objects.items.len);
+
+    return Hittable{ .tree = tree };
+}
+
+fn twoPerlinWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hittable {
+    const perlin = NoiseTexture.init(4);
+    const material = Material{ .lambertian = materials.Lambertian.init(perlin) };
+
+    try world_objects.append(Sphere.init(Vec3{ 0, -1000, 0 }, 1000, material));
+    try world_objects.append(Sphere.init(Vec3{ 0, 2, 0 }, 2, material));
 
     const tree = try BVHTree.init(allocator, world_objects.items, 0, world_objects.items.len);
 
@@ -273,7 +286,8 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window, images: std.Array
 
     // const world = try earthWorld(allocator, images, &world_objects);
     // const world = try twoSpheresWorld(allocator, &world_objects);
-    const world = try generateWorld(allocator, images, &world_objects);
+    // const world = try generateWorld(allocator, images, &world_objects);
+    const world = try twoPerlinWorld(allocator, &world_objects);
     // defer world.deinit();
 
     const threads = std.ArrayList(RenderThread).init(allocator);
