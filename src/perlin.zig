@@ -1,7 +1,8 @@
 const std = @import("std");
 const rtweekend = @import("rtweekend.zig");
-const Vec3 = @import("vec3.zig").Vec3;
+const vec3 = @import("vec3.zig");
 
+const Vec3 = vec3.Vec3;
 const POINT_COUNT: u16 = 256;
 
 fn permute(p: *[POINT_COUNT]u16, n: u16) void {
@@ -26,7 +27,31 @@ fn perlin_generate_perm() [POINT_COUNT]u16 {
     return p;
 }
 
-// TODO I'm getting banding here.
+fn perlin_interp(c: [2][2][2]Vec3, u: f32, v: f32, w: f32) f32 {
+    const uu = u * u * (3 - 2 * u);
+    const vv = v * v * (3 - 2 * v);
+    const ww = w * w * (3 - 2 * w);
+    var accum: f32 = 0;
+    var i: u8 = 0;
+    while (i < 2) : (i += 1) {
+        var j: u8 = 0;
+        while (j < 2) : (j += 1) {
+            var k: u8 = 0;
+            while (k < 2) : (k += 1) {
+                const i_f: f32 = @floatFromInt(i);
+                const j_f: f32 = @floatFromInt(j);
+                const k_f: f32 = @floatFromInt(k);
+                const weight_v = Vec3{ u - i_f, v - j_f, w - k_f };
+                accum += (i_f * uu + (1 - i_f) * (1 - uu)) *
+                    (j_f * vv + (1 - j_f) * (1 - vv)) *
+                    (k_f * ww + (1 - k_f) * (1 - ww)) * vec3.dot(c[i][j][k], weight_v);
+            }
+        }
+    }
+
+    return accum;
+}
+
 fn trilinear_interp(c: [2][2][2]f32, u: f32, v: f32, w: f32) f32 {
     var accum: f32 = 0;
     var i: u8 = 0;
@@ -49,16 +74,18 @@ fn trilinear_interp(c: [2][2][2]f32, u: f32, v: f32, w: f32) f32 {
 }
 
 pub const Perlin = struct {
-    ranfloat: [POINT_COUNT]f32,
+    // ranfloat: [POINT_COUNT]f32,
+    ranvec: [POINT_COUNT]Vec3,
     perm_x: [POINT_COUNT]u16,
     perm_y: [POINT_COUNT]u16,
     perm_z: [POINT_COUNT]u16,
 
     pub fn init() Perlin {
-        var ranfloat = [_]f32{0} ** POINT_COUNT;
+        var ranvec = [_]Vec3{Vec3{ 0, 0, 0 }} ** POINT_COUNT;
         var i: u16 = 0;
         while (i < POINT_COUNT) : (i += 1) {
-            ranfloat[i] = rtweekend.randomDouble();
+            // ranfloat[i] = rtweekend.randomDouble();
+            ranvec[i] = vec3.unitVector(vec3.randomRange(-1, 1));
         }
 
         const perm_x = perlin_generate_perm();
@@ -66,7 +93,7 @@ pub const Perlin = struct {
         const perm_z = perlin_generate_perm();
 
         return Perlin{
-            .ranfloat = ranfloat,
+            .ranvec = ranvec,
             .perm_x = perm_x,
             .perm_y = perm_y,
             .perm_z = perm_z,
@@ -74,19 +101,19 @@ pub const Perlin = struct {
     }
 
     pub fn noise(self: Perlin, p: Vec3) f32 {
-        var u = p[0] - @floor(p[0]);
-        var v = p[1] - @floor(p[1]);
-        var w = p[2] - @floor(p[2]);
-        u = u * u * (3 - 2 * u);
-        v = v * v * (3 - 2 * v);
-        w = w * w * (3 - 2 * w);
+        const u = p[0] - @floor(p[0]);
+        const v = p[1] - @floor(p[1]);
+        const w = p[2] - @floor(p[2]);
+        // u = u * u * (3 - 2 * u);
+        // v = v * v * (3 - 2 * v);
+        // w = w * w * (3 - 2 * w);
 
         // TODO: the abs hack  means that there are issues somewhere upstream.
         const i: i32 = @intFromFloat(@floor(p[0]));
         const j: i32 = @intFromFloat(@floor(p[1]));
         const k: i32 = @intFromFloat(@floor(p[2]));
 
-        var c: [2][2][2]f32 = undefined;
+        var c: [2][2][2]Vec3 = undefined;
 
         var di: u8 = 0;
         while (di < 2) : (di += 1) {
@@ -97,12 +124,18 @@ pub const Perlin = struct {
                     const idi: usize = @intCast((i + di) & 255);
                     const idj: usize = @intCast((j + dj) & 255);
                     const idk: usize = @intCast((k + dk) & 255);
-                    c[di][dj][dk] = self.ranfloat[self.perm_x[idi] ^ self.perm_y[idj] ^ self.perm_z[idk]];
+                    const perm_x = self.perm_x[idi];
+                    const perm_y = self.perm_y[idj];
+                    const perm_z = self.perm_z[idk];
+                    c[di][dj][dk] = self.ranvec[perm_x ^ perm_y ^ perm_z];
+
+                    // c[di][dj][dk] = self.ranfloat[self.perm_x[idi] ^ self.perm_y[idj] ^ self.perm_z[idk]];
                 }
             }
         }
 
-        return trilinear_interp(c, u, v, w);
+        // return trilinear_interp(c, u, v, w);
+        return perlin_interp(c, u, v, w);
 
         // const i: u32 = @intFromFloat(@abs(@rem(4 * p[0], 256)));
         // const j: u32 = @intFromFloat(@abs(@rem(4 * p[1], 256)));
