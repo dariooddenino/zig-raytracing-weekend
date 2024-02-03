@@ -98,6 +98,13 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
 
+    zgui_pkg.link(exe_unit_tests);
+    zgpu_pkg.link(exe_unit_tests);
+    zglfw_pkg.link(exe_unit_tests);
+    zstbi_pkg.link(exe_unit_tests);
+
+    exe_unit_tests.step.dependOn(&install_content_step.step);
+
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
 
     // Similar to creating the run step earlier, this exposes a `test` step to

@@ -2,6 +2,7 @@ const std = @import("std");
 const vec3 = @import("vec3.zig");
 const RtwImage = @import("rtw_image.zig").RtwImage;
 const Interval = @import("interval.zig").Interval;
+const zstbi = @import("zstbi");
 
 const Vec3 = vec3.Vec3;
 
@@ -70,30 +71,28 @@ pub const CheckerTexture = struct {
 };
 
 pub const ImageTexture = struct {
-    image: RtwImage,
+    rtw_image: RtwImage,
 
-    pub fn init(allocator: std.mem.Allocator, image_filename: []const u8) !Texture {
-        const image = try RtwImage.init(allocator, image_filename);
-        return Texture{ .image_texture = ImageTexture{ .image = image } };
+    pub fn init(images: std.ArrayList(zstbi.Image), image_index: u8) Texture {
+        const rtw_image = RtwImage.init(images, image_index);
+        return Texture{ .image_texture = ImageTexture{ .rtw_image = rtw_image } };
     }
 
-    pub fn deinit(self: ImageTexture) void {
-        self.image.deinit();
-    }
+    pub fn deinit(_: ImageTexture) void {}
 
     pub fn value(self: ImageTexture, u: f32, v: f32, _: Vec3) Vec3 {
+        const image = self.rtw_image.getImage();
         // If we have no texture data, then return soilid cyan as a debugging aid.
         const cyan = Vec3{ 0, 1, 1 };
-        if (self.image.image_height <= 0) return cyan;
+        if (image.height <= 0) return cyan;
 
         // Clamp input texture coordiantes to [0,1] x [1,0]
         const new_u = (Interval{ .min = 0, .max = 1 }).clamp(u);
         const new_v = 1.0 - (Interval{ .min = 0, .max = 1 }).clamp(v); // Flip V
 
-        const i: u32 = @intFromFloat(new_u * @as(f32, @floatFromInt(self.image.image_width)));
-        const j: u32 = @intFromFloat(new_v * @as(f32, @floatFromInt(self.image.image_height)));
-        // TODO eh
-        const pixel = self.image.pixelData(i, j);
+        const i: u32 = @intFromFloat(new_u * @as(f32, @floatFromInt(image.width)));
+        const j: u32 = @intFromFloat(new_v * @as(f32, @floatFromInt(image.height)));
+        const pixel = self.rtw_image.pixelData(i, j);
 
         const color_scale: f32 = 1.0 / 255.0;
         return Vec3{ color_scale * @as(f32, @floatFromInt(pixel[0])), color_scale * @as(f32, @floatFromInt(pixel[1])), color_scale * @as(f32, @floatFromInt(pixel[2])) };

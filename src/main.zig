@@ -37,8 +37,6 @@ const window_title = "zig-gamedev: gui test (wgpu)";
 const embedded_font_data = @embedFile("./FiraCode-Medium.ttf");
 const number_of_threads = 8;
 
-// TODO fix progress bar inconsistencies
-// TODO disable controls while rendering
 // TODO alter all camera parameters
 // TODO alter number of threads
 // TODO save to file
@@ -78,12 +76,13 @@ pub const RayTraceState = struct {
     allocator: std.mem.Allocator,
     render_start: *i64,
     render_end: *i64,
+    images: std.ArrayList(zstbi.Image),
 };
 
-fn earthWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hittable {
-    const earth_texture = try ImageTexture.init(allocator, "earthmap.jpg");
+fn earthWorld(allocator: std.mem.Allocator, images: std.ArrayList(zstbi.Image), world_objects: *ObjectList) !Hittable {
+    const earth_texture = ImageTexture.init(images, 0);
     // TODO try defer earth_texture: how does it work?
-    defer earth_texture.deinit();
+    // defer earth_texture.deinit();
     // defer earth_texture.deinit() catch |err| {
     //     _ = err;
     // };
@@ -101,7 +100,7 @@ fn twoSpheresWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hi
     const checker_black = SolidColor.init(Vec3{ 0.2, 0.3, 0.1 });
     const checker_white = SolidColor.init(Vec3{ 0.9, 0.9, 0.9 });
     const checker = CheckerTexture.init(0.8, checker_black, checker_white);
-    const material = Material{ .lambertian = materials.Lambertian.init(Texture{ .checker_texture = checker }) };
+    const material = Material{ .lambertian = materials.Lambertian.init(checker) };
 
     try world_objects.append(Sphere.init(Vec3{ 0, -10, 0 }, 10, material));
     try world_objects.append(Sphere.init(Vec3{ 0, 10, 0 }, 10, material));
@@ -206,12 +205,9 @@ fn shouldStopRender(raytrace: *RayTraceState) !void {
     }
 }
 
-fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*RayTraceState {
+fn create(allocator: std.mem.Allocator, window: *zglfw.Window, images: std.ArrayList(zstbi.Image)) !*RayTraceState {
     const gctx = try zgpu.GraphicsContext.create(allocator, window, .{});
     errdefer gctx.destroy(allocator);
-
-    zstbi.init(allocator);
-    defer zstbi.deinit();
 
     zgui.init(allocator);
     zgui.plot.init();
@@ -275,9 +271,9 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*RayTraceState {
     var world_objects = ObjectList.init(allocator);
     // defer world_objects.deinit();
 
-    // const world = try earthWorld(allocator, &world_objects);
+    const world = try earthWorld(allocator, images, &world_objects);
     // const world = try twoSpheresWorld(allocator, &world_objects);
-    const world = try generateWorld(allocator, &world_objects);
+    // const world = try generateWorld(raytrace, &world_objects);
     // defer world.deinit();
 
     const threads = std.ArrayList(RenderThread).init(allocator);
@@ -304,6 +300,7 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*RayTraceState {
         .allocator = allocator,
         .render_start = render_start,
         .render_end = render_end,
+        .images = images,
     };
 
     try updateTexture(raytrace);
@@ -949,7 +946,16 @@ pub fn main() !void {
     defer arena_state.deinit();
     const allocator = arena_state.allocator();
 
-    const raytrace = try create(allocator, window);
+    zstbi.init(allocator);
+    defer zstbi.deinit();
+
+    var images = std.ArrayList(zstbi.Image).init(allocator);
+    var earth_map = try zstbi.Image.loadFromFile(content_dir ++ "earthmap.jpg", 4);
+    try images.append(earth_map);
+    defer earth_map.deinit();
+    defer images.clearAndFree();
+
+    const raytrace = try create(allocator, window, images);
     defer destroy(allocator, raytrace);
 
     while (!window.shouldClose() and window.getKey(.escape) != .press) {
@@ -989,3 +995,24 @@ pub fn main() !void {
 //     //     expectEqual(data[i], @as(u8, @intCast(i)));
 //     // }
 // }
+
+test "rtwimage value" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    var arena_state = std.heap.ArenaAllocator.init(gpa.allocator());
+    defer arena_state.deinit();
+    const allocator = arena_state.allocator();
+
+    zstbi.init(allocator);
+    defer zstbi.deinit();
+
+    var images = std.ArrayList(zstbi.Image).init(allocator);
+    var earth_map = try zstbi.Image.loadFromFile("content/" ++ "earthmap.jpg", 4);
+    try images.append(earth_map);
+    defer earth_map.deinit();
+    defer images.clearAndFree();
+
+    const rtw_image = RtwImage.init(images, 0);
+
+    try std.testing.expectEqual([3]u8{ 0, 0, 50 }, rtw_image.pixelData(91, 172));
+}
