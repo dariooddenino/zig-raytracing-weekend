@@ -491,6 +491,23 @@ fn update(raytrace: *RayTraceState) !void {
 
     const draw_list = zgui.getBackgroundDrawList();
     draw_list.addImage(tex_id, .{ .pmin = .{ 20, 20 }, .pmax = .{ @floatFromInt(raytrace.camera.image_width + 20), @floatFromInt(raytrace.camera.image_height + 20) } });
+
+    // Movement test
+    // Assumes the starting camera parameters.
+    // TODO this was a very naive attempt. Currently not working.
+    // I need a way to keep track of frames, this is running at every single tick.
+    const move: bool = true;
+    if (move and raytrace.render_running.*) {
+        const now = std.time.milliTimestamp();
+        const elapsed = now - raytrace.render_start.*;
+
+        const z = 3 + @as(f32, @floatFromInt(elapsed - now)) * 0.001;
+
+        // try stopRender(raytrace);
+        raytrace.camera.lookfrom = Vec3{ raytrace.camera.lookfrom[0], raytrace.camera.lookfrom[1], z };
+        // try raytrace.camera.init();
+        // try startRender(raytrace);
+    }
 }
 
 // fn updatez(demo: *DemoState) !void {

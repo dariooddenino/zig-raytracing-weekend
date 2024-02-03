@@ -73,7 +73,6 @@ pub const Perlin = struct {
         };
     }
 
-    // TODO this doesn't generate the correct noise I think.
     pub fn noise(self: Perlin, p: Vec3) f32 {
         var u = p[0] - @floor(p[0]);
         var v = p[1] - @floor(p[1]);
@@ -83,9 +82,9 @@ pub const Perlin = struct {
         w = w * w * (3 - 2 * w);
 
         // TODO: the abs hack  means that there are issues somewhere upstream.
-        const i: u32 = @intFromFloat(@abs(@floor(p[0])));
-        const j: u32 = @intFromFloat(@abs(@floor(p[1])));
-        const k: u32 = @intFromFloat(@abs(@floor(p[2])));
+        const i: i32 = @intFromFloat(@floor(p[0]));
+        const j: i32 = @intFromFloat(@floor(p[1]));
+        const k: i32 = @intFromFloat(@floor(p[2]));
 
         var c: [2][2][2]f32 = undefined;
 
@@ -95,7 +94,10 @@ pub const Perlin = struct {
             while (dj < 2) : (dj += 1) {
                 var dk: u8 = 0;
                 while (dk < 2) : (dk += 1) {
-                    c[di][dj][dk] = self.ranfloat[self.perm_x[(i + di) & 255] ^ self.perm_y[(j + dj) & 255] ^ self.perm_z[(k + dk) & 255]];
+                    const idi: usize = @intCast((i + di) & 255);
+                    const idj: usize = @intCast((j + dj) & 255);
+                    const idk: usize = @intCast((k + dk) & 255);
+                    c[di][dj][dk] = self.ranfloat[self.perm_x[idi] ^ self.perm_y[idj] ^ self.perm_z[idk]];
                 }
             }
         }
