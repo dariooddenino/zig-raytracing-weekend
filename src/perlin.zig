@@ -100,6 +100,20 @@ pub const Perlin = struct {
         };
     }
 
+    pub fn turb(self: Perlin, p: Vec3, depth: u8) f32 {
+        var accum: f32 = 0;
+        var temp_p = p;
+        var weight: f32 = 1.0;
+        var i: u8 = 0;
+        while (i < depth) : (i += 1) {
+            accum += weight * self.noise(temp_p);
+            weight *= 0.5;
+            temp_p = temp_p * vec3.splat3(2);
+        }
+
+        return @abs(accum);
+    }
+
     pub fn noise(self: Perlin, p: Vec3) f32 {
         const u = p[0] - @floor(p[0]);
         const v = p[1] - @floor(p[1]);

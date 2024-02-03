@@ -116,6 +116,9 @@ pub const NoiseTexture = struct {
     pub fn deinit(_: NoiseTexture) void {}
 
     pub fn value(self: NoiseTexture, _: f32, _: f32, p: Vec3) Vec3 {
-        return Vec3{ 1, 1, 1 } * vec3.splat3(0.5) * vec3.splat3(1 + self.noise.noise(vec3.splat3(self.scale) * p));
+        const s = vec3.splat3(self.scale) * p;
+        return vec3.splat3(0.5 * (1 + @sin(s[2] + 10 * self.noise.turb(s, 7))));
+        // return vec3.splat3(1) * vec3.splat3(self.noise.turb(s, 7));
+        // return Vec3{ 1, 1, 1 } * vec3.splat3(0.5) * vec3.splat3(1 + self.noise.noise(vec3.splat3(self.scale) * p));
     }
 };
