@@ -37,6 +37,7 @@ const window_title = "zig-gamedev: gui test (wgpu)";
 const embedded_font_data = @embedFile("./FiraCode-Medium.ttf");
 const number_of_threads = 8;
 
+// TODO I think I should use zpool
 // TODO alter all camera parameters
 // TODO alter number of threads
 // TODO save to file
@@ -77,16 +78,13 @@ pub const RayTraceState = struct {
     render_start: *i64,
     render_end: *i64,
     images: std.ArrayList(zstbi.Image),
+    prev_background_texture: ?zgpu.TextureHandle,
 };
 
 fn earthWorld(allocator: std.mem.Allocator, images: std.ArrayList(zstbi.Image), world_objects: *ObjectList) !Hittable {
     const earth_texture = ImageTexture.init(images, 0);
-    // TODO try defer earth_texture: how does it work?
-    // defer earth_texture.deinit();
-    // defer earth_texture.deinit() catch |err| {
-    //     _ = err;
-    // };
     const earth_surface = Material{ .lambertian = materials.Lambertian.init(earth_texture) };
+
     const globe = Sphere.init(Vec3{ 0, 0, 0 }, 2, earth_surface);
 
     try world_objects.append(globe);
@@ -110,7 +108,7 @@ fn twoSpheresWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hi
     return Hittable{ .tree = tree };
 }
 
-fn generateWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hittable {
+fn generateWorld(allocator: std.mem.Allocator, images: std.ArrayList(zstbi.Image), world_objects: *ObjectList) !Hittable {
 
     // NOTE Maybe I should make this pointers.
     // NOTE Should allocate and free?
@@ -158,8 +156,10 @@ fn generateWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hitt
     const material1 = Material{ .dielectric = materials.Dielectric{ .ir = 1.5 } };
     try world_objects.append(Sphere.init(Vec3{ 0, 1, 0 }, 1.0, material1));
 
-    const material2 = Material{ .lambertian = materials.Lambertian.fromColor(Vec3{ 0.4, 0.2, 0.1 }) };
-    try world_objects.append(Sphere.init(Vec3{ -4, 1, 0 }, 1.0, material2));
+    const earth_texture = ImageTexture.init(images, 0);
+    const earth_surface = Material{ .lambertian = materials.Lambertian.init(earth_texture) };
+    // const material2 = Material{ .lambertian = materials.Lambertian.fromColor(Vec3{ 0.4, 0.2, 0.1 }) };
+    try world_objects.append(Sphere.init(Vec3{ -4, 1, 0 }, 1.0, earth_surface));
 
     const material3 = Material{ .metal = materials.Metal.fromColor(Vec3{ 0.7, 0.6, 0.5 }, 0.1) };
     try world_objects.append(Sphere.init(Vec3{ 4, 1, 0 }, 1.0, material3));
@@ -271,9 +271,9 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window, images: std.Array
     var world_objects = ObjectList.init(allocator);
     // defer world_objects.deinit();
 
-    const world = try earthWorld(allocator, images, &world_objects);
+    // const world = try earthWorld(allocator, images, &world_objects);
     // const world = try twoSpheresWorld(allocator, &world_objects);
-    // const world = try generateWorld(raytrace, &world_objects);
+    const world = try generateWorld(allocator, images, &world_objects);
     // defer world.deinit();
 
     const threads = std.ArrayList(RenderThread).init(allocator);
@@ -301,10 +301,10 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window, images: std.Array
         .render_start = render_start,
         .render_end = render_end,
         .images = images,
+        .prev_background_texture = null,
     };
 
     try updateTexture(raytrace);
-
     return raytrace;
 }
 
@@ -454,6 +454,12 @@ fn updateTexture(raytrace: *RayTraceState) !void {
         image.data,
     );
 
+    if (raytrace.prev_background_texture) |handle| {
+        raytrace.gctx.destroyResource(handle);
+        raytrace.gctx.releaseResource(raytrace.texture_view);
+    }
+
+    raytrace.prev_background_texture = texture;
     raytrace.texture_view = texture_view;
 }
 
@@ -995,24 +1001,3 @@ pub fn main() !void {
 //     //     expectEqual(data[i], @as(u8, @intCast(i)));
 //     // }
 // }
-
-test "rtwimage value" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    var arena_state = std.heap.ArenaAllocator.init(gpa.allocator());
-    defer arena_state.deinit();
-    const allocator = arena_state.allocator();
-
-    zstbi.init(allocator);
-    defer zstbi.deinit();
-
-    var images = std.ArrayList(zstbi.Image).init(allocator);
-    var earth_map = try zstbi.Image.loadFromFile("content/" ++ "earthmap.jpg", 4);
-    try images.append(earth_map);
-    defer earth_map.deinit();
-    defer images.clearAndFree();
-
-    const rtw_image = RtwImage.init(images, 0);
-
-    try std.testing.expectEqual([3]u8{ 0, 0, 50 }, rtw_image.pixelData(91, 172));
-}

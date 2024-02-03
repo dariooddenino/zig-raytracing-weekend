@@ -90,8 +90,11 @@ pub const ImageTexture = struct {
         const new_u = (Interval{ .min = 0, .max = 1 }).clamp(u);
         const new_v = 1.0 - (Interval{ .min = 0, .max = 1 }).clamp(v); // Flip V
 
-        const i: u32 = @intFromFloat(new_u * @as(f32, @floatFromInt(image.width)));
-        const j: u32 = @intFromFloat(new_v * @as(f32, @floatFromInt(image.height)));
+        const u_p: f32 = new_u * @as(f32, @floatFromInt(image.width));
+        const v_p: f32 = new_v * @as(f32, @floatFromInt(image.height));
+
+        const i: u32 = @intFromFloat(@floor(u_p));
+        const j: u32 = @intFromFloat(@floor(v_p));
         const pixel = self.rtw_image.pixelData(i, j);
 
         const color_scale: f32 = 1.0 / 255.0;
