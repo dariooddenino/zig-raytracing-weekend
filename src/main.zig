@@ -28,6 +28,7 @@ const ObjectList = std.ArrayList(Hittable);
 const SharedStateImageWriter = cameras.SharedStateImageWriter;
 const SolidColor = textures.SolidColor;
 const Texture = textures.Texture;
+const Quad = objects.Quad;
 const Sphere = objects.Sphere;
 const Task = cameras.Task;
 const Vec3 = vec3.Vec3;
@@ -111,10 +112,80 @@ fn twoSpheresWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hi
 
 fn twoPerlinWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hittable {
     const perlin = NoiseTexture.init(4);
-    const material = Material{ .lambertian = materials.Lambertian.init(perlin) };
+    const material = materials.Lambertian.init(perlin);
 
     try world_objects.append(Sphere.init(Vec3{ 0, -1000, 0 }, 1000, material));
     try world_objects.append(Sphere.init(Vec3{ 0, 2, 0 }, 2, material));
+
+    const tree = try BVHTree.init(allocator, world_objects.items, 0, world_objects.items.len);
+
+    return Hittable{ .tree = tree };
+}
+
+fn quadsWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hittable {
+    const left_red = materials.Lambertian.init(SolidColor.init(Vec3{ 1, 0.2, 0.2 }));
+    const back_green = materials.Lambertian.init(SolidColor.init(Vec3{ 0.2, 1.0, 0.2 }));
+    const right_blue = materials.Lambertian.init(SolidColor.init(Vec3{ 0.2, 0.2, 1.0 }));
+    const upper_orange = materials.Lambertian.init(SolidColor.init(Vec3{ 1.0, 0.5, 0 }));
+    const lower_teal = materials.Lambertian.init(SolidColor.init(Vec3{ 0.2, 0.8, 0.8 }));
+
+    try world_objects.append(Quad.init(Vec3{ -3, -2, 5 }, Vec3{ 0, 0, -4 }, Vec3{ 0, 4, 0 }, left_red));
+    try world_objects.append(Quad.init(Vec3{ -2, -2, 0 }, Vec3{ 4, 0, 0 }, Vec3{ 0, 4, 0 }, back_green));
+    try world_objects.append(Quad.init(Vec3{ 3, -2, 1 }, Vec3{ 0, 0, 4 }, Vec3{ 0, 4, 0 }, right_blue));
+    try world_objects.append(Quad.init(Vec3{ -2, -3, 1 }, Vec3{ 4, 0, 0 }, Vec3{ 0, 0, 4 }, upper_orange));
+    try world_objects.append(Quad.init(Vec3{ -2, -3, 5 }, Vec3{ 4, 0, 0 }, Vec3{ 0, 0, -4 }, lower_teal));
+
+    const tree = try BVHTree.init(allocator, world_objects.items, 0, world_objects.items.len);
+
+    return Hittable{ .tree = tree };
+}
+
+fn simpleLightWorld(allocator: std.mem.Allocator, world_objects: *ObjectList, camera: *Camera) !Hittable {
+    const perlin = NoiseTexture.init(4);
+    const material = materials.Lambertian.init(perlin);
+
+    try world_objects.append(Sphere.init(Vec3{ 0, -1000, 0 }, 1000, material));
+    try world_objects.append(Sphere.init(Vec3{ 0, 2, 0 }, 2, material));
+
+    const difflight = materials.DiffuseLight.init(SolidColor.init(Vec3{ 4, 4, 4 }));
+    try world_objects.append(Quad.init(Vec3{ 3, 1, -2 }, Vec3{ 2, 0, 0 }, Vec3{ 0, 2, 0 }, difflight));
+    try world_objects.append(Sphere.init(Vec3{ 0, 7, 0 }, 2, difflight));
+
+    camera.lookfrom = Vec3{ 26, 3, 6 };
+    camera.lookat = Vec3{ 0, 2, 0 };
+    camera.vup = Vec3{ 0, 1, 0 };
+    camera.max_depth = 50;
+
+    camera.defocus_angle = 0;
+
+    const tree = try BVHTree.init(allocator, world_objects.items, 0, world_objects.items.len);
+
+    return Hittable{ .tree = tree };
+}
+
+fn cornellBox(allocator: std.mem.Allocator, world_objects: *ObjectList, camera: *Camera) !Hittable {
+    const red = materials.Lambertian.init(SolidColor.init(Vec3{ 0.65, 0.05, 0.05 }));
+    const white = materials.Lambertian.init(SolidColor.init(Vec3{ 0.73, 0.73, 0.73 }));
+    const green = materials.Lambertian.init(SolidColor.init(Vec3{ 0.12, 0.45, 0.15 }));
+    const light = materials.DiffuseLight.init(SolidColor.init(Vec3{ 15, 15, 15 }));
+
+    try world_objects.append(Quad.init(Vec3{ 555, 0, 0 }, Vec3{ 0, 555, 0 }, Vec3{ 0, 0, 555 }, green));
+    try world_objects.append(Quad.init(Vec3{ 0, 0, 0 }, Vec3{ 0, 555, 0 }, Vec3{ 0, 0, 555 }, red));
+    try world_objects.append(Quad.init(Vec3{ 343, 554, 332 }, Vec3{ -130, 0, 0 }, Vec3{ 0, 0, -105 }, light));
+    try world_objects.append(Quad.init(Vec3{ 0, 0, 0 }, Vec3{ 555, 0, 0 }, Vec3{ 0, 0, 555 }, white));
+    try world_objects.append(Quad.init(Vec3{ 555, 555, 555 }, Vec3{ -555, 0, 0 }, Vec3{ 0, 0, -555 }, white));
+    try world_objects.append(Quad.init(Vec3{ 0, 0, 555 }, Vec3{ 555, 0, 0 }, Vec3{ 0, 555, 0 }, white));
+
+    camera.image_width = 600;
+    camera.aspect_ratio = 1;
+    camera.samples_per_pixel = 200;
+    camera.max_depth = 200;
+    camera.vfov = 40;
+    camera.lookfrom = Vec3{ 278, 278, -800 };
+    camera.lookat = Vec3{ 278, 278, 0 };
+    camera.vup = Vec3{ 0, 1, 0 };
+    camera.defocus_angle = 0;
+    try camera.init();
 
     const tree = try BVHTree.init(allocator, world_objects.items, 0, world_objects.items.len);
 
@@ -287,7 +358,10 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window, images: std.Array
     // const world = try earthWorld(allocator, images, &world_objects);
     // const world = try twoSpheresWorld(allocator, &world_objects);
     // const world = try generateWorld(allocator, images, &world_objects);
-    const world = try twoPerlinWorld(allocator, &world_objects);
+    // const world = try twoPerlinWorld(allocator, &world_objects);
+    // const world = try quadsWorld(allocator, &world_objects);
+    // const world = try simpleLightWorld(allocator, &world_objects, camera);
+    const world = try cornellBox(allocator, &world_objects, camera);
     // defer world.deinit();
 
     const threads = std.ArrayList(RenderThread).init(allocator);
@@ -496,7 +570,7 @@ fn update(raytrace: *RayTraceState) !void {
     // Assumes the starting camera parameters.
     // TODO this was a very naive attempt. Currently not working.
     // I need a way to keep track of frames, this is running at every single tick.
-    const move: bool = true;
+    const move: bool = false;
     if (move and raytrace.render_running.*) {
         const now = std.time.milliTimestamp();
         const elapsed = now - raytrace.render_start.*;

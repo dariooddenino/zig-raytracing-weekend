@@ -33,6 +33,15 @@ pub const Aabb = struct {
         return Aabb{ .x = x, .y = y, .z = z };
     }
 
+    pub fn pad(self: Aabb) Aabb {
+        const delta = 0.0001;
+        const new_x = if (self.x.size() >= delta) self.x else self.x.expand(delta);
+        const new_y = if (self.y.size() >= delta) self.y else self.y.expand(delta);
+        const new_z = if (self.z.size() >= delta) self.z else self.z.expand(delta);
+
+        return Aabb{ .x = new_x, .y = new_y, .z = new_z };
+    }
+
     pub fn axis(self: Aabb, n: usize) Interval {
         if (n == 1) return self.y;
         if (n == 2) return self.z;

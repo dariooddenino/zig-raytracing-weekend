@@ -33,6 +33,7 @@ pub const HitRecord = struct {
 
 pub const Hittable = union(enum) {
     sphere: Sphere,
+    quad: Quad,
     tree: BVHTree,
 
     pub fn hit(self: Hittable, r: rays.Ray, ray_t: Interval) ?HitRecord {
@@ -132,6 +133,75 @@ pub const Sphere = struct {
         rec.setFaceNormal(r, outward_normal);
         getSphereUV(outward_normal, &rec.u, &rec.v);
         rec.mat = self.mat;
+
+        return rec;
+    }
+};
+
+pub const Quad = struct {
+    q: Vec3,
+    u: Vec3,
+    v: Vec3,
+    mat: Material,
+    bounding_box: Aabb = Aabb{},
+    normal: Vec3,
+    d: f32,
+    w: Vec3,
+
+    pub fn init(q: Vec3, u: Vec3, v: Vec3, mat: Material) Hittable {
+        const n = vec3.cross(u, v);
+        const normal = vec3.unitVector(n);
+        const d = vec3.dot(normal, q);
+        const w = n / vec3.splat3(vec3.dot(n, n));
+        return Hittable{ .quad = Quad{ .q = q, .u = u, .v = v, .mat = mat, .bounding_box = Aabb.fromPoints(q, q + u + v).pad(), .normal = normal, .d = d, .w = w } };
+    }
+
+    pub fn boundingBox(self: Quad) Aabb {
+        return self.bounding_box;
+    }
+
+    pub fn deinit(_: Quad) void {}
+
+    fn isInterior(a: f32, b: f32, rec: *HitRecord) bool {
+        // Given the hit point in plane coordinates, return false if it is outside the
+        // primitive, otherwise set the hit record UV coordinates and return true.
+
+        if ((a < 0) or (1 < a) or (b < 0) or (1 < b)) return false;
+
+        rec.u = a;
+        rec.v = b;
+        return true;
+    }
+
+    pub fn hit(
+        self: Quad,
+        r: Ray,
+        ray_t: Interval,
+    ) ?HitRecord {
+        const denom = vec3.dot(self.normal, r.direction);
+
+        // No hit if the ray is parallel to the plane.
+        if (@abs(denom) < 1e-8) return null;
+
+        // Return false if the hit point parameter t is outside the ray interval.
+        const t = (self.d - vec3.dot(self.normal, r.origin)) / denom;
+        if (!ray_t.contains(t)) return null;
+
+        // Determine the hit point lies within the planar shape using its plane coordinates.
+        const interesection = r.at(t);
+        const planar_hitpt_vector = interesection - self.q;
+        const alpha = vec3.dot(self.w, vec3.cross(planar_hitpt_vector, self.v));
+        const beta = vec3.dot(self.w, vec3.cross(self.u, planar_hitpt_vector));
+
+        var rec = HitRecord{};
+        if (!isInterior(alpha, beta, &rec)) return null;
+
+        // Ray hits the 2D shape; set the rest of the hit record and return true;
+
+        rec.t = t;
+        rec.p = interesection;
+        rec.mat = self.mat;
+        rec.setFaceNormal(r, self.normal);
 
         return rec;
     }

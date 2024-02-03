@@ -12,10 +12,18 @@ pub const Material = union(enum) {
     lambertian: Lambertian,
     metal: Metal,
     dielectric: Dielectric,
+    diffuse_light: DiffuseLight,
 
     pub fn scatter(self: Material, r_in: ray.Ray, rec: objects.HitRecord, attenuation: *vec3.Vec3, scattered: *ray.Ray) bool {
         switch (self) {
             inline else => |object| return object.scatter(r_in, rec, attenuation, scattered),
+        }
+    }
+
+    pub fn emitted(self: Material, u: f32, v: f32, p: vec3.Vec3) vec3.Vec3 {
+        switch (self) {
+            .diffuse_light => |object| return object.emitted(u, v, p),
+            inline else => |_| return vec3.Vec3{ 0, 0, 0 },
         }
     }
 };
@@ -23,12 +31,12 @@ pub const Material = union(enum) {
 pub const Lambertian = struct {
     albedo: Texture,
 
-    pub fn init(texture: Texture) Lambertian {
-        return Lambertian{ .albedo = texture };
+    pub fn init(texture: Texture) Material {
+        return Material{ .lambertian = Lambertian{ .albedo = texture } };
     }
 
-    pub fn fromColor(color: vec3.Vec3) Lambertian {
-        return Lambertian{ .albedo = SolidColor.init(color) };
+    pub fn fromColor(color: vec3.Vec3) Material {
+        return Material{ .lambertian = Lambertian{ .albedo = SolidColor.init(color) } };
     }
 
     pub fn scatter(self: Lambertian, r_in: ray.Ray, rec: objects.HitRecord, attenuation: *vec3.Vec3, scattered: *ray.Ray) bool {
@@ -49,8 +57,8 @@ pub const Metal = struct {
     albedo: vec3.Vec3,
     fuzz: f32 = 1,
 
-    pub fn fromColor(color: vec3.Vec3, f: f32) Metal {
-        return Metal{ .albedo = color, .fuzz = if (f < 1) f else 1 };
+    pub fn fromColor(color: vec3.Vec3, f: f32) Material {
+        return Material{ .metal = Metal{ .albedo = color, .fuzz = if (f < 1) f else 1 } };
     }
 
     pub fn scatter(self: Metal, r_in: ray.Ray, rec: objects.HitRecord, attenuation: *vec3.Vec3, scattered: *ray.Ray) bool {
@@ -63,6 +71,10 @@ pub const Metal = struct {
 
 pub const Dielectric = struct {
     ir: f32 = 1,
+
+    pub fn init(ir: f32) Material {
+        return Material{ .dielectric = Dielectric{ .ir = ir } };
+    }
 
     pub fn scatter(self: Dielectric, r_in: ray.Ray, rec: objects.HitRecord, attenuation: *vec3.Vec3, scattered: *ray.Ray) bool {
         attenuation.* = vec3.Vec3{ 1, 1, 1 };
@@ -91,3 +103,23 @@ fn reflectance(cosine: f32, ref_idx: f32) f32 {
     r0 = r0 * r0;
     return r0 + (1 - r0) * std.math.pow(f32, (1 - cosine), 5);
 }
+
+pub const DiffuseLight = struct {
+    emit: Texture,
+
+    pub fn init(texture: Texture) Material {
+        return Material{ .diffuse_light = DiffuseLight{ .emit = texture } };
+    }
+
+    pub fn fromColor(color: vec3.Vec3) Material {
+        return Material{ .diffuse_light = DiffuseLight{ .emit = SolidColor.init(color) } };
+    }
+
+    pub fn scatter(_: DiffuseLight, _: ray.Ray, _: objects.HitRecord, _: *vec3.Vec3, _: *ray.Ray) bool {
+        return false;
+    }
+
+    pub fn emitted(self: DiffuseLight, u: f32, v: f32, p: vec3.Vec3) vec3.Vec3 {
+        return self.emit.value(u, v, p);
+    }
+};

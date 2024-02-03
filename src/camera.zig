@@ -77,6 +77,7 @@ pub const Camera = struct {
     pixel_delta_v: vec3.Vec3 = undefined,
     samples_per_pixel: u16 = 100,
     max_depth: u8 = 16,
+    background: Vec3 = vec3.Vec3{ 0, 0, 0 },
     vfov: f32 = 20,
     lookfrom: vec3.Vec3 = vec3.Vec3{ 13, 2, 3 },
     lookat: vec3.Vec3 = vec3.zero(),
@@ -190,16 +191,19 @@ pub const Camera = struct {
         if (opt_hit_record) |hit_record| {
             var scattered = ray.Ray{};
             var attenuation = vec3.zero();
+            const color_from_emission = hit_record.mat.emitted(hit_record.u, hit_record.v, hit_record.p);
 
             if (hit_record.mat.scatter(r, hit_record, &attenuation, &scattered)) {
-                return attenuation * self.rayColor(scattered, depth - 1, world);
-            }
-            return vec3.zero();
-        }
+                const color_from_scatter = attenuation * self.rayColor(scattered, depth - 1, world);
 
-        // NOTE: this was giving me a flat white now?
-        const unit_direction = vec3.unitVector(r.direction);
-        const a: f32 = 0.5 * (unit_direction[1] + 1.0);
-        return vec3.Vec3{ 1, 1, 1 } * vec3.splat3(1.0 - a) + vec3.Vec3{ 0.5, 0.7, 1.0 } * vec3.splat3(a);
+                return color_from_emission + color_from_scatter;
+            }
+            // return vec3.zero();
+            return color_from_emission;
+        }
+        // const unit_direction = vec3.unitVector(r.direction);
+        // const a: f32 = 0.5 * (unit_direction[1] + 1.0);
+        // return vec3.Vec3{ 1, 1, 1 } * vec3.splat3(1.0 - a) + vec3.Vec3{ 0.5, 0.7, 1.0 } * vec3.splat3(a);
+        return self.background;
     }
 };
