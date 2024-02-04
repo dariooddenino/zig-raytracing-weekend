@@ -5,6 +5,7 @@ const materials = @import("material.zig");
 const intervals = @import("interval.zig");
 const aabbs = @import("aabb.zig");
 const bvhs = @import("bvh.zig");
+const rtweekend = @import("rtweekend.zig");
 
 const Aabb = aabbs.Aabb;
 const BVHTree = bvhs.BVHTree;
@@ -35,6 +36,8 @@ pub const Hittable = union(enum) {
     sphere: Sphere,
     quad: Quad,
     list: HittableList,
+    translate: Translate,
+    rotate_y: RotateY,
     tree: BVHTree,
 
     pub fn hit(self: Hittable, r: rays.Ray, ray_t: Interval) ?HitRecord {
@@ -248,6 +251,144 @@ pub const HittableList = struct {
         }
 
         return rec;
+    }
+};
+
+// NOTE: Can this be done in a different way?
+pub const Translate = struct {
+    offset: Vec3,
+    object: *Hittable,
+    bounding_box: Aabb = Aabb{},
+    allocator: std.mem.Allocator,
+
+    pub fn init(allocator: std.mem.Allocator, obj: Hittable, offset: Vec3) !Hittable {
+        const bbox = obj.boundingBox().add(offset);
+        const object = try allocator.create(Hittable);
+        object.* = obj;
+        return Hittable{ .translate = Translate{ .allocator = allocator, .offset = offset, .object = object, .bounding_box = bbox } };
+    }
+
+    pub fn deinit(_: Translate) void {}
+
+    pub fn boundingBox(self: Translate) Aabb {
+        return self.bounding_box;
+    }
+
+    pub fn hit(
+        self: Translate,
+        r: Ray,
+        ray_t: Interval,
+    ) ?HitRecord {
+        // Move the ray backwards by the offset.
+        const moved_ray = Ray{ .origin = r.origin - self.offset, .direction = r.direction, .time = r.time };
+
+        // Determine where (if any) an intersection occurs along the offset ray.
+        const is_hit = self.object.hit(moved_ray, ray_t);
+
+        if (is_hit) |rec| {
+            var new_rec = rec;
+            new_rec.p += self.offset;
+            return new_rec;
+        }
+
+        return null;
+    }
+};
+
+pub const RotateY = struct {
+    object: *Hittable,
+    sin_theta: f32,
+    cos_theta: f32,
+    bounding_box: Aabb = Aabb{},
+    allocator: std.mem.Allocator,
+
+    pub fn init(allocator: std.mem.Allocator, obj: Hittable, angle: f32) !Hittable {
+        const radians = rtweekend.degreesToRadians(angle);
+        const sin_theta = std.math.sin(radians);
+        const cos_theta = std.math.cos(radians);
+        const bbox = obj.boundingBox();
+
+        const object = try allocator.create(Hittable);
+        object.* = obj;
+
+        const inf = rtweekend.infinity;
+
+        var min = Vec3{ inf, inf, inf };
+        var max = Vec3{ -inf, -inf, -inf };
+
+        for (0..2) |i| {
+            for (0..2) |j| {
+                for (0..2) |k| {
+                    const i_f: f32 = @floatFromInt(i);
+                    const j_f: f32 = @floatFromInt(j);
+                    const k_f: f32 = @floatFromInt(k);
+                    const x = i_f * bbox.x.max + (1 - i_f) * bbox.x.min;
+                    const y = j_f * bbox.y.max + (1 - j_f) * bbox.y.min;
+                    const z = k_f * bbox.z.max + (1 - k_f) * bbox.z.min;
+
+                    const newx = cos_theta * x + sin_theta * z;
+                    const newz = -sin_theta * x + cos_theta * z;
+
+                    const tester = Vec3{ newx, y, newz };
+
+                    for (0..3) |c| {
+                        min[c] = @min(min[c], tester[c]);
+                        max[c] = @max(max[c], tester[c]);
+                    }
+                }
+            }
+        }
+
+        return Hittable{ .rotate_y = RotateY{ .allocator = allocator, .object = object, .sin_theta = sin_theta, .cos_theta = cos_theta, .bounding_box = Aabb.fromPoints(min, max) } };
+    }
+
+    pub fn deinit(self: RotateY) void {
+        self.allocator.free(self.object);
+    }
+
+    pub fn boundingBox(self: RotateY) Aabb {
+        return self.bounding_box;
+    }
+
+    pub fn hit(
+        self: RotateY,
+        r: Ray,
+        ray_t: Interval,
+    ) ?HitRecord {
+        // Change the ray from world space to object space.
+        var origin = r.origin;
+        var direction = r.direction;
+
+        origin[0] = self.cos_theta * r.origin[0] - self.sin_theta * r.origin[2];
+        origin[2] = self.sin_theta * r.origin[0] + self.cos_theta * r.origin[2];
+
+        direction[0] = self.cos_theta * r.direction[0] - self.sin_theta * r.direction[2];
+        direction[2] = self.sin_theta * r.direction[0] + self.cos_theta * r.direction[2];
+
+        const rotated_ray = Ray{ .origin = origin, .direction = direction, .time = r.time };
+
+        // Determine where (if any) an intersection occurs in the object space.
+        const is_hit = self.object.hit(rotated_ray, ray_t);
+
+        if (is_hit) |rec| {
+            // Change the intersection point from object space to world space
+            var new_rec = rec;
+            var p = rec.p;
+            p[0] = self.cos_theta * rec.p[0] + self.sin_theta * rec.p[2];
+            p[2] = -self.sin_theta * rec.p[0] + self.cos_theta * rec.p[2];
+
+            // Change the normal from object space to world space
+            var normal = rec.normal;
+            normal[0] = self.cos_theta * rec.normal[0] + self.sin_theta * rec.normal[2];
+            normal[2] = -self.sin_theta * rec.normal[0] + self.cos_theta * rec.normal[2];
+
+            new_rec.p = p;
+            new_rec.normal = normal;
+
+            return new_rec;
+        }
+
+        return null;
     }
 };
 

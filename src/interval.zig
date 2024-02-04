@@ -27,6 +27,10 @@ pub const Interval = struct {
         const padding = delta / 2.0;
         return Interval{ .min = self.min - padding, .max = self.max + padding };
     }
+
+    pub fn add(self: Interval, displacement: f32) Interval {
+        return Interval{ .min = self.min + displacement, .max = self.max + displacement };
+    }
 };
 
 pub const empty = Interval{ .min = rtweekend.infinity, .max = -rtweekend.infinity };

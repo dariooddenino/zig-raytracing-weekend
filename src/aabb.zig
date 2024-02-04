@@ -48,6 +48,14 @@ pub const Aabb = struct {
         return self.x;
     }
 
+    pub fn add(self: Aabb, offset: Vec3) Aabb {
+        return Aabb{
+            .x = self.x.add(offset[0]),
+            .y = self.y.add(offset[1]),
+            .z = self.z.add(offset[2]),
+        };
+    }
+
     // pub fn hit(self: Aabb, r: Ray, ray_t: *Interval) bool {
     //     for (0..3) |a| {
     //         // std.debug.print("\nLOOP {d}\n", .{a});
