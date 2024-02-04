@@ -176,6 +176,9 @@ fn cornellBox(allocator: std.mem.Allocator, world_objects: *ObjectList, camera: 
     try world_objects.append(Quad.init(Vec3{ 555, 555, 555 }, Vec3{ -555, 0, 0 }, Vec3{ 0, 0, -555 }, white));
     try world_objects.append(Quad.init(Vec3{ 0, 0, 555 }, Vec3{ 555, 0, 0 }, Vec3{ 0, 555, 0 }, white));
 
+    try world_objects.append(try objects.createBox(allocator, Vec3{ 130, 0, 65 }, Vec3{ 295, 165, 230 }, white));
+    try world_objects.append(try objects.createBox(allocator, Vec3{ 265, 0, 295 }, Vec3{ 430, 330, 460 }, white));
+
     camera.image_width = 600;
     camera.aspect_ratio = 1;
     camera.samples_per_pixel = 200;

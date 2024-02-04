@@ -34,6 +34,7 @@ pub const HitRecord = struct {
 pub const Hittable = union(enum) {
     sphere: Sphere,
     quad: Quad,
+    list: HittableList,
     tree: BVHTree,
 
     pub fn hit(self: Hittable, r: rays.Ray, ray_t: Interval) ?HitRecord {
@@ -206,3 +207,70 @@ pub const Quad = struct {
         return rec;
     }
 };
+
+pub const HittableList = struct {
+    objects: std.ArrayList(Hittable),
+    bounding_box: Aabb = Aabb{},
+    allocator: std.mem.Allocator,
+
+    pub fn init(allocator: std.mem.Allocator) Hittable {
+        const objects = std.ArrayList(Hittable).init(allocator);
+        return Hittable{ .list = HittableList{ .objects = objects, .allocator = allocator } };
+    }
+
+    pub fn add(self: *HittableList, object: Hittable) !void {
+        try self.objects.append(object);
+        self.bounding_box = Aabb.fromBoxes(self.bounding_box, object.boundingBox());
+    }
+
+    pub fn boundingBox(self: HittableList) Aabb {
+        return self.bounding_box;
+    }
+
+    pub fn deinit(self: *HittableList) void {
+        self.objects.clearAndFree();
+    }
+
+    pub fn hit(
+        self: HittableList,
+        r: Ray,
+        ray_t: Interval,
+    ) ?HitRecord {
+        var rec: ?HitRecord = null;
+        var closest_so_far = ray_t.max;
+
+        for (self.objects.items) |object| {
+            const is_hit = object.hit(r, Interval{ .min = ray_t.min, .max = closest_so_far });
+            if (is_hit) |h| {
+                closest_so_far = h.t;
+                rec = h;
+            }
+        }
+
+        return rec;
+    }
+};
+
+pub fn createBox(allocator: std.mem.Allocator, a: Vec3, b: Vec3, mat: Material) !Hittable {
+    // Returns the 3D box (six sides) that contains the two opposite vertices a & b.
+
+    var sides = HittableList.init(allocator);
+
+    // Construct the two opposite vertices with the minimum and maximum coordinates.
+
+    const min = Vec3{ @min(a[0], b[0]), @min(a[1], b[1]), @min(a[2], b[2]) };
+    const max = Vec3{ @max(a[0], b[0]), @max(a[1], b[1]), @max(a[2], b[2]) };
+
+    const dx = Vec3{ max[0] - min[0], 0, 0 };
+    const dy = Vec3{ 0, max[1] - min[1], 0 };
+    const dz = Vec3{ 0, 0, max[2] - min[2] };
+
+    try sides.list.add(Quad.init(Vec3{ min[0], min[1], min[2] }, dx, dy, mat));
+    try sides.list.add(Quad.init(Vec3{ max[0], min[1], max[2] }, -dz, dy, mat));
+    try sides.list.add(Quad.init(Vec3{ max[0], min[1], min[2] }, -dx, dy, mat));
+    try sides.list.add(Quad.init(Vec3{ min[0], min[1], min[2] }, dz, dy, mat));
+    try sides.list.add(Quad.init(Vec3{ min[0], max[1], max[2] }, dx, -dz, mat));
+    try sides.list.add(Quad.init(Vec3{ min[0], min[1], min[2] }, dx, dz, mat));
+
+    return sides;
+}
