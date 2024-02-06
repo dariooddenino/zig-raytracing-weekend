@@ -13,6 +13,7 @@ pub const Material = union(enum) {
     metal: Metal,
     dielectric: Dielectric,
     diffuse_light: DiffuseLight,
+    isotropic: Isotropic,
 
     pub fn scatter(self: Material, r_in: ray.Ray, rec: objects.HitRecord, attenuation: *vec3.Vec3, scattered: *ray.Ray) bool {
         switch (self) {
@@ -121,5 +122,23 @@ pub const DiffuseLight = struct {
 
     pub fn emitted(self: DiffuseLight, u: f32, v: f32, p: vec3.Vec3) vec3.Vec3 {
         return self.emit.value(u, v, p);
+    }
+};
+
+pub const Isotropic = struct {
+    albedo: Texture,
+
+    pub fn init(texture: Texture) Material {
+        return Material{ .isotropic = Isotropic{ .albedo = texture } };
+    }
+
+    pub fn fromColor(color: vec3.Vec3) Material {
+        return Material{ .isotropic = Isotropic{ .albedo = SolidColor.init(color) } };
+    }
+
+    pub fn scatter(self: Isotropic, r_in: ray.Ray, rec: objects.HitRecord, attenuation: *vec3.Vec3, scattered: *ray.Ray) bool {
+        scattered.* = ray.Ray{ .origin = rec.p, .direction = vec3.randomUnitVector(), .time = r_in.time };
+        attenuation.* = self.albedo.value(rec.u, rec.v, rec.p);
+        return true;
     }
 };

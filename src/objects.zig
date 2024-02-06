@@ -6,11 +6,15 @@ const intervals = @import("interval.zig");
 const aabbs = @import("aabb.zig");
 const bvhs = @import("bvh.zig");
 const rtweekend = @import("rtweekend.zig");
+const textures = @import("textures.zig");
 
 const Aabb = aabbs.Aabb;
 const BVHTree = bvhs.BVHTree;
 const Interval = intervals.Interval;
+const Isotropic = materials.Isotropic;
 const Material = materials.Material;
+const SolidColor = textures.SolidColor;
+const Texture = textures.Texture;
 const Vec3 = vec3.Vec3;
 const Ray = rays.Ray;
 
@@ -38,6 +42,7 @@ pub const Hittable = union(enum) {
     list: HittableList,
     translate: Translate,
     rotate_y: RotateY,
+    constant_medium: ConstantMedium,
     tree: BVHTree,
 
     pub fn hit(self: Hittable, r: rays.Ray, ray_t: Interval) ?HitRecord {
@@ -388,6 +393,70 @@ pub const RotateY = struct {
             return new_rec;
         }
 
+        return null;
+    }
+};
+
+pub const ConstantMedium = struct {
+    boundary: *Hittable,
+    neg_inv_density: f32,
+    phase_function: Material,
+
+    pub fn initFromColor(b: *Hittable, d: f32, c: Vec3) Hittable {
+        return Hittable{ .constant_medium = ConstantMedium{ .boundary = b, .neg_inv_density = -1.0 / d, .phase_function = Isotropic.init(SolidColor.init(c)) } };
+    }
+
+    pub fn initFromTexture(b: *Hittable, d: f32, a: Texture) Hittable {
+        return Hittable{ .constant_medium = ConstantMedium{ .boundary = b, .neg_inv_density = -1.0 / d, .phase_function = Isotropic.init(Material.initIsotropic(a)) } };
+    }
+
+    pub fn boundingBox(self: ConstantMedium) Aabb {
+        return self.boundary.boundingBox();
+    }
+
+    pub fn hit(self: ConstantMedium, r: Ray, ray_t: Interval) ?HitRecord {
+        // Print occasional samples when debugging. To enable, set enableDebug true.
+        const enableDebug = true;
+        const debugging = enableDebug and (rtweekend.randomDouble() < 0.00001);
+
+        const rec_1o = self.boundary.hit(r, intervals.universe);
+        if (rec_1o) |r1| {
+            var rec_1 = r1;
+            const rec_2o = self.boundary.hit(r, Interval{ .min = rec_1.t + 0.0001, .max = rtweekend.infinity });
+            if (rec_2o) |r2| {
+                var rec_2 = r2;
+                if (debugging) std.debug.print("\nray_tmin={d}, ray_tmax={d}\n", .{ rec_1.t, rec_2.t });
+
+                if (rec_1.t < ray_t.min) rec_1.t = ray_t.min;
+                if (rec_2.t > ray_t.max) rec_2.t = ray_t.max;
+
+                if (rec_1.t >= rec_2.t) return null;
+
+                if (rec_1.t < 0) rec_1.t = 0;
+
+                const ray_length = vec3.length(r.direction);
+                const distance_inside_boundary = (rec_2.t - rec_1.t) * ray_length;
+                // TODO log10?
+                const hit_distance = self.neg_inv_density * std.math.log10(rtweekend.randomDouble());
+
+                if (hit_distance > distance_inside_boundary) return null;
+
+                var rec = HitRecord{};
+                rec.t = rec_1.t + hit_distance / ray_length;
+                rec.p = r.at(rec.t);
+
+                if (debugging) {
+                    std.debug.print("hit_distance={d}\nrec.t={d}\nrec.p={d}\n", .{ hit_distance, rec.t, rec.p });
+                }
+
+                rec.normal = Vec3{ 1, 0, 0 }; // arbitrary
+                rec.front_face = true; // also arbitrary
+                rec.mat = self.phase_function;
+
+                return rec;
+            }
+            return null;
+        }
         return null;
     }
 };

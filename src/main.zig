@@ -20,6 +20,7 @@ const BVHTree = bvh.BVHTree;
 const Camera = cameras.Camera;
 const CheckerTexture = textures.CheckerTexture;
 const ColorAndSamples = colors.ColorAndSamples;
+const ConstantMedium = objects.ConstantMedium;
 const Hittable = objects.Hittable;
 const ImageTexture = textures.ImageTexture;
 const Material = materials.Material;
@@ -202,6 +203,52 @@ fn cornellBox(allocator: std.mem.Allocator, world_objects: *ObjectList, camera: 
     return Hittable{ .tree = tree };
 }
 
+fn cornellBoxSmoke(allocator: std.mem.Allocator, world_objects: *ObjectList, camera: *Camera) !Hittable {
+    const red = materials.Lambertian.init(SolidColor.init(Vec3{ 0.65, 0.05, 0.05 }));
+    const white = materials.Lambertian.init(SolidColor.init(Vec3{ 0.73, 0.73, 0.73 }));
+    const green = materials.Lambertian.init(SolidColor.init(Vec3{ 0.12, 0.45, 0.15 }));
+    const light = materials.DiffuseLight.init(SolidColor.init(Vec3{ 15, 15, 15 }));
+
+    try world_objects.append(Quad.init(Vec3{ 555, 0, 0 }, Vec3{ 0, 555, 0 }, Vec3{ 0, 0, 555 }, green));
+    try world_objects.append(Quad.init(Vec3{ 0, 0, 0 }, Vec3{ 0, 555, 0 }, Vec3{ 0, 0, 555 }, red));
+    try world_objects.append(Quad.init(Vec3{ 343, 554, 332 }, Vec3{ -130, 0, 0 }, Vec3{ 0, 0, -105 }, light));
+    try world_objects.append(Quad.init(Vec3{ 0, 0, 0 }, Vec3{ 555, 0, 0 }, Vec3{ 0, 0, 555 }, white));
+    try world_objects.append(Quad.init(Vec3{ 555, 555, 555 }, Vec3{ -555, 0, 0 }, Vec3{ 0, 0, -555 }, white));
+    try world_objects.append(Quad.init(Vec3{ 0, 0, 555 }, Vec3{ 555, 0, 0 }, Vec3{ 0, 555, 0 }, white));
+
+    const box1 = try allocator.create(Hittable);
+    // defer allocator.free(box1);
+
+    // TODO ConstantMedium, RotateY, Translate devono essere per forza Hittable? Mi sa di si'.
+    box1.* = try objects.createBox(allocator, Vec3{ 0, 0, 0 }, Vec3{ 165, 330, 165 }, white);
+    box1.* = try objects.RotateY.init(allocator, box1.*, 15);
+    box1.* = try objects.Translate.init(allocator, box1.*, Vec3{ 265, 0, 295 });
+    try world_objects.append(ConstantMedium.initFromColor(box1, 0.01, Vec3{ 0, 0, 0 }));
+
+    const box2 = try allocator.create(Hittable);
+    // defer allocator.destroy(box2);
+
+    box2.* = try objects.createBox(allocator, Vec3{ 0, 0, 0 }, Vec3{ 165, 165, 165 }, white);
+    box2.* = try objects.RotateY.init(allocator, box2.*, -18);
+    box2.* = try objects.Translate.init(allocator, box2.*, Vec3{ 130, 0, 65 });
+    try world_objects.append(ConstantMedium.initFromColor(box2, 0.01, Vec3{ 1, 1, 1 }));
+
+    camera.image_width = 600;
+    camera.aspect_ratio = 1;
+    camera.samples_per_pixel = 200;
+    camera.max_depth = 50;
+    camera.vfov = 40;
+    camera.lookfrom = Vec3{ 278, 278, -800 };
+    camera.lookat = Vec3{ 278, 278, 0 };
+    camera.vup = Vec3{ 0, 1, 0 };
+    camera.defocus_angle = 0;
+    try camera.init();
+
+    const tree = try BVHTree.init(allocator, world_objects.items, 0, world_objects.items.len);
+
+    return Hittable{ .tree = tree };
+}
+
 fn generateWorld(allocator: std.mem.Allocator, images: std.ArrayList(zstbi.Image), world_objects: *ObjectList) !Hittable {
 
     // NOTE Maybe I should make this pointers.
@@ -371,7 +418,9 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window, images: std.Array
     // const world = try twoPerlinWorld(allocator, &world_objects);
     // const world = try quadsWorld(allocator, &world_objects);
     // const world = try simpleLightWorld(allocator, &world_objects, camera);
-    const world = try cornellBox(allocator, &world_objects, camera);
+    // const world = try cornellBox(allocator, &world_objects, camera);
+    const world = try cornellBoxSmoke(allocator, &world_objects, camera);
+
     // defer world.deinit();
 
     const threads = std.ArrayList(RenderThread).init(allocator);
