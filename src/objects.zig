@@ -436,8 +436,7 @@ pub const ConstantMedium = struct {
 
                 const ray_length = vec3.length(r.direction);
                 const distance_inside_boundary = (rec_2.t - rec_1.t) * ray_length;
-                // TODO log10?
-                const hit_distance = self.neg_inv_density * std.math.log10(rtweekend.randomDouble());
+                const hit_distance = self.neg_inv_density * @log(rtweekend.randomDouble());
 
                 if (hit_distance > distance_inside_boundary) return null;
 
