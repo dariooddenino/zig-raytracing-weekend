@@ -416,7 +416,7 @@ pub const ConstantMedium = struct {
 
     pub fn hit(self: ConstantMedium, r: Ray, ray_t: Interval) ?HitRecord {
         // Print occasional samples when debugging. To enable, set enableDebug true.
-        const enableDebug = true;
+        const enableDebug = false;
         const debugging = enableDebug and (rtweekend.randomDouble() < 0.00001);
 
         const rec_1o = self.boundary.hit(r, intervals.universe);

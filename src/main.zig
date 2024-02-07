@@ -40,6 +40,7 @@ const window_title = "zig-gamedev: gui test (wgpu)";
 const embedded_font_data = @embedFile("./FiraCode-Medium.ttf");
 const number_of_threads = 8;
 
+// TODO Maybe use a fixedbufferallocator in some places?
 // TODO I think I should use zpool
 // TODO alter all camera parameters
 // TODO alter number of threads
@@ -207,11 +208,11 @@ fn cornellBoxSmoke(allocator: std.mem.Allocator, world_objects: *ObjectList, cam
     const red = materials.Lambertian.init(SolidColor.init(Vec3{ 0.65, 0.05, 0.05 }));
     const white = materials.Lambertian.init(SolidColor.init(Vec3{ 0.73, 0.73, 0.73 }));
     const green = materials.Lambertian.init(SolidColor.init(Vec3{ 0.12, 0.45, 0.15 }));
-    const light = materials.DiffuseLight.init(SolidColor.init(Vec3{ 15, 15, 15 }));
+    const light = materials.DiffuseLight.init(SolidColor.init(Vec3{ 7, 7, 7 }));
 
     try world_objects.append(Quad.init(Vec3{ 555, 0, 0 }, Vec3{ 0, 555, 0 }, Vec3{ 0, 0, 555 }, green));
     try world_objects.append(Quad.init(Vec3{ 0, 0, 0 }, Vec3{ 0, 555, 0 }, Vec3{ 0, 0, 555 }, red));
-    try world_objects.append(Quad.init(Vec3{ 343, 554, 332 }, Vec3{ -130, 0, 0 }, Vec3{ 0, 0, -105 }, light));
+    try world_objects.append(Quad.init(Vec3{ 113, 554, 127 }, Vec3{ 330, 0, 0 }, Vec3{ 0, 0, 305 }, light));
     try world_objects.append(Quad.init(Vec3{ 0, 0, 0 }, Vec3{ 555, 0, 0 }, Vec3{ 0, 0, 555 }, white));
     try world_objects.append(Quad.init(Vec3{ 555, 555, 555 }, Vec3{ -555, 0, 0 }, Vec3{ 0, 0, -555 }, white));
     try world_objects.append(Quad.init(Vec3{ 0, 0, 555 }, Vec3{ 555, 0, 0 }, Vec3{ 0, 555, 0 }, white));
