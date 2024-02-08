@@ -440,17 +440,19 @@ pub const ConstantMedium = struct {
 
                 if (hit_distance > distance_inside_boundary) return null;
 
-                var rec = HitRecord{};
-                rec.t = rec_1.t + hit_distance / ray_length;
-                rec.p = r.at(rec.t);
+                const rec_t = rec_1.t + hit_distance / ray_length;
+
+                const rec = HitRecord{
+                    .t = rec_t,
+                    .p = r.at(rec_t),
+                    .normal = Vec3{ 1, 0, 0 }, // arbitrary
+                    .front_face = true, // also arbitrary
+                    .mat = self.phase_function,
+                };
 
                 if (debugging) {
                     std.debug.print("hit_distance={d}\nrec.t={d}\nrec.p={d}\n", .{ hit_distance, rec.t, rec.p });
                 }
-
-                rec.normal = Vec3{ 1, 0, 0 }; // arbitrary
-                rec.front_face = true; // also arbitrary
-                rec.mat = self.phase_function;
 
                 return rec;
             }

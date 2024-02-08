@@ -1,0 +1,26 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+				"label": "build",
+				"type": "shell",
+				"command": "zig build",
+				"group": {
+					"kind": "build",
+					"isDefault": true
+				}
+		},
+		{
+			"type": "valgrind",
+			"target": "${command:cmake.launchTargetPath}",
+			"problemMatcher": [
+				"$valgrind"
+			],
+			"label": "valgrind: valgrind",
+			"group": {
+				"kind": "build",
+				"isDefault": false
+			}
+		}
+	]
+}
