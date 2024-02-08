@@ -100,8 +100,8 @@ fn earthWorld(allocator: std.mem.Allocator, images: std.ArrayList(zstbi.Image), 
 fn twoSpheresWorld(allocator: std.mem.Allocator, world_objects: *ObjectList) !Hittable {
     const checker_black = SolidColor.init(Vec3{ 0.2, 0.3, 0.1 });
     const checker_white = SolidColor.init(Vec3{ 0.9, 0.9, 0.9 });
-    const checker = CheckerTexture.init(0.8, checker_black, checker_white);
-    const material = Material{ .lambertian = materials.Lambertian.init(checker) };
+    const checker = CheckerTexture.init(0.8, checker_black.solid_color, checker_white.solid_color);
+    const material = materials.Lambertian.init(checker);
 
     try world_objects.append(Sphere.init(Vec3{ 0, -10, 0 }, 10, material));
     try world_objects.append(Sphere.init(Vec3{ 0, 10, 0 }, 10, material));
@@ -418,8 +418,8 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window, images: std.Array
     // const world = try twoPerlinWorld(allocator, &world_objects);
     // const world = try quadsWorld(allocator, &world_objects);
     // const world = try simpleLightWorld(allocator, &world_objects, camera);
-    // const world = try cornellBox(allocator, &world_objects, camera);
-    const world = try cornellBoxSmoke(allocator, &world_objects, camera);
+    const world = try cornellBox(allocator, &world_objects, camera);
+    // const world = try cornellBoxSmoke(allocator, &world_objects, camera);
 
     // defer world.deinit();
 

@@ -35,7 +35,7 @@ pub const Interval = struct {
 
 pub const empty = Interval{ .min = rtweekend.infinity, .max = -rtweekend.infinity };
 
-pub const universe = Interval{};
+pub const universe = Interval{ .min = -rtweekend.infinity, .max = rtweekend.infinity };
 
 // NOTE: I couldn't find this on the original.
 // I'm assuming the implementation is this.
