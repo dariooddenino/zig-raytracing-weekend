@@ -4,6 +4,8 @@ const zgpu = @import("zgpu");
 const zgui = @import("zgui");
 const zstbi = @import("zstbi");
 
+const GUI = @import("gui.zig").GUI;
+
 const content_dir = @import("build_options").content_dir;
 const embedded_font_data = @embedFile("./FiraCode-Medium.ttf");
 const window_title = "HooRay";
@@ -12,85 +14,46 @@ const window_height = 1000;
 
 pub const HooRayState = struct {
     allocator: std.mem.Allocator,
-    gctx: *zgpu.GraphicsContext,
+    gui: *GUI,
 };
 
 fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*HooRayState {
-    const gctx = try zgpu.GraphicsContext.create(allocator, window, .{});
-    errdefer gctx.destroy(allocator);
-
-    zgui.init(allocator);
-    zgui.plot.init();
-    const scale_factor = scale_factor: {
-        const scale = window.getContentScale();
-        break :scale_factor @max(scale[0], scale[1]);
-    };
-    const font_size = 16.0 * scale_factor;
-    const font_large = zgui.io.addFontFromMemory(embedded_font_data, @floor(font_size * 1.1));
-    const font_normal = zgui.io.addFontFromFile(content_dir ++ "Roboto-Medium.ttf", @floor(font_size));
-    std.debug.assert(zgui.io.getFont(0) == font_large);
-    std.debug.assert(zgui.io.getFont(1) == font_normal);
-
-    // This needs to be called *after* adding your custom fonts.
-    zgui.backend.initWithConfig(
-        window,
-        gctx.device,
-        @intFromEnum(zgpu.GraphicsContext.swapchain_format),
-        .{ .texture_filter_mode = .linear, .pipeline_multisample_count = 1 },
-    );
-
-    // This call is optional. Initially, zgui.io.getFont(0) is a default font.
-    zgui.io.setDefaultFont(font_normal);
-
-    // You can directly manipulate zgui.Style *before* `newFrame()` call.
-    // Once frame is started (after `newFrame()` call) you have to use
-    // zgui.pushStyleColor*()/zgui.pushStyleVar*() functions.
-    const style = zgui.getStyle();
-
-    style.window_min_size = .{ 320.0, 240.0 };
-    style.window_border_size = 8.0;
-    style.scrollbar_size = 6.0;
-    {
-        var color = style.getColor(.scrollbar_grab);
-        color[1] = 0.8;
-        style.setColor(.scrollbar_grab, color);
-    }
-    style.scaleAllSizes(scale_factor);
-
-    {
-        zgui.plot.getStyle().line_weight = 3.0;
-        const plot_style = zgui.plot.getStyle();
-        plot_style.marker = .circle;
-        plot_style.marker_size = 5.0;
-    }
-
+    const gui = try allocator.create(GUI);
+    gui.* = try GUI.init(allocator, window);
     const hooray = try allocator.create(HooRayState);
 
     hooray.* = .{
         .allocator = allocator,
-        .gctx = gctx,
+        .gui = gui,
     };
 
     return hooray;
 }
 
+// TODO I need to come back here to do some more proper cleanup
 fn destroy(allocator: std.mem.Allocator, hooray: *HooRayState) void {
     zgui.backend.deinit();
     zgui.plot.deinit();
     zgui.deinit();
-    hooray.gctx.destroy(allocator);
+    hooray.gui.deinit();
     allocator.destroy(hooray);
 }
 
+// TODO this will probably have to be moved to GUI?
+// It looks like it's a weird mix of both functions.
+// This one in theory should just update the state.
 fn update(hooray: *HooRayState) !void {
     zgui.backend.newFrame(
-        hooray.gctx.swapchain_descriptor.width,
-        hooray.gctx.swapchain_descriptor.height,
+        hooray.gui.gctx.swapchain_descriptor.width,
+        hooray.gui.gctx.swapchain_descriptor.height,
     );
+
+    hooray.gui.render();
 }
 
+// TODO this will probably have to be moved to GUI?
 fn draw(hooray: *HooRayState) void {
-    const gctx = hooray.gctx;
+    const gctx = hooray.gui.gctx;
 
     const swapchain_texv = gctx.swapchain.getCurrentTextureView();
     defer swapchain_texv.release();
@@ -143,12 +106,6 @@ pub fn main() !void {
 
     zstbi.init(allocator);
     defer zstbi.deinit();
-
-    // var images = std.ArrayList(zstbi.Image).init(allocator);
-    // var earth_map = try zstbi.Image.loadFromFile(content_dir ++ "earthmap.jpg", 4);
-    // try images.append(earth_map);
-    // defer earth_map.deinit();
-    // defer images.clearAndFree();
 
     const hooray = try create(allocator, window);
     defer destroy(allocator, hooray);

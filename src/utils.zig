@@ -19,14 +19,12 @@ pub inline fn randomDoubleRange(min: f32, max: f32) f32 {
     return min + (max - min) * randomDouble();
 }
 
-// NOTE: not entirely sure about this
 pub inline fn randomIntRange(min: u32, max: u32) u32 {
     const min_f: f32 = toFloat(min);
     const max_f: f32 = toFloat(max + 1);
     return @intFromFloat(@round(randomDoubleRange(min_f, max_f)));
 }
 
-// TODO: Do we have property testing in zig?
 test "randomDouble" {
     const val = randomDouble();
     try std.testing.expect(val > 0 and val < 1);
