@@ -4,7 +4,12 @@ const zgpu = @import("zgpu");
 const zgui = @import("zgui");
 const zstbi = @import("zstbi");
 
+const engines = @import("engines.zig");
+
 const GUI = @import("gui.zig").GUI;
+const Light = @import("lights.zig").Light;
+const Object = @import("objects.zig").Object;
+const Engine = engines.Engine;
 
 const content_dir = @import("build_options").content_dir;
 const embedded_font_data = @embedFile("./FiraCode-Medium.ttf");
@@ -15,6 +20,9 @@ const window_height = 1000;
 pub const HooRayState = struct {
     allocator: std.mem.Allocator,
     gui: *GUI,
+    objects: std.ArrayList(Object),
+    lights: std.ArrayList(Light),
+    engine: *Engine,
 };
 
 fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*HooRayState {
@@ -22,9 +30,19 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*HooRayState {
     gui.* = try GUI.init(allocator, window);
     const hooray = try allocator.create(HooRayState);
 
+    const objects = std.ArrayList(Object).init(allocator);
+    const lights = std.ArrayList(Light).init(allocator);
+
+    const engine = try allocator.create(Engine);
+    // TODO until I know what to do
+    engine.* = Engine{ .weekend = engines.Weekend{} };
+
     hooray.* = .{
         .allocator = allocator,
         .gui = gui,
+        .objects = objects,
+        .lights = lights,
+        .engine = engine,
     };
 
     return hooray;
@@ -36,6 +54,8 @@ fn destroy(allocator: std.mem.Allocator, hooray: *HooRayState) void {
     zgui.plot.deinit();
     zgui.deinit();
     hooray.gui.deinit();
+    hooray.objects.deinit();
+    hooray.lights.deinit();
     allocator.destroy(hooray);
 }
 

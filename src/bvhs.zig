@@ -1,18 +1,17 @@
 const std = @import("std");
-const aabb = @import("aabb.zig");
-const rays = @import("ray.zig");
-const interval = @import("interval.zig");
-const rtweekend = @import("rtweekend.zig");
-const material = @import("material.zig");
-const vec3 = @import("vec3.zig");
+const aabbs = @import("aabbs.zig");
+const rays = @import("rays.zig");
+const intervals = @import("intervals.zig");
+const utils = @import("utils.zig");
+const materials = @import("materials.zig");
+const vec = @import("vec.zig");
 const objects = @import("objects.zig");
 
-const Vec3 = vec3.Vec3;
 const Ray = rays.Ray;
 const Hittable = objects.Hittable;
 const HitRecord = objects.HitRecord;
-const Aabb = aabb.Aabb;
-const Interval = interval.Interval;
+const Aabb = aabbs.Aabb;
+const Interval = intervals.Interval;
 
 pub const BVHTree = struct {
     allocator: std.mem.Allocator,
@@ -45,7 +44,7 @@ pub const BVHTree = struct {
         var right: *BVHNode = undefined;
 
         const obj_span = end - start;
-        const axis = rtweekend.randomIntRange(0, 2);
+        const axis = utils.randomIntRange(0, 2);
 
         switch (obj_span) {
             1 => {

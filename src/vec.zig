@@ -2,6 +2,7 @@ const std = @import("std");
 const utils = @import("utils.zig");
 
 pub const Color = @Vector(3, f32);
+pub const Position = @Vector(3, f32);
 pub const Vec3 = @Vector(3, f32);
 
 pub inline fn zero() Vec3 {
@@ -83,4 +84,15 @@ pub fn refract(uv: Vec3, n: Vec3, etai_over_etat: f32) Vec3 {
     const r_out_perp = splat3(etai_over_etat) * (uv + n * splat3(cos_theta));
     const r_out_parallel = n * splat3(-@sqrt(@abs(1.0 - lengthSquared(r_out_perp))));
     return r_out_perp + r_out_parallel;
+}
+
+test "mixing different aliases" {
+    const v = Vec3{ 1, 2, 3 };
+    const p = Position{ 1, 2, 3 };
+    const c = Color{ 1, 2, 3 };
+
+    try std.testing.expectEqual(v, p);
+    try std.testing.expectEqual(v, c);
+    try std.testing.expectEqual(p, c);
+    try std.testing.expectEqual(v + p, Color{ 2, 4, 6 });
 }

@@ -1,9 +1,9 @@
 const std = @import("std");
-const rtweekend = @import("rtweekend.zig");
+const utils = @import("utils.zig");
 
 pub const Interval = struct {
-    min: f32 = rtweekend.infinity,
-    max: f32 = -rtweekend.infinity,
+    min: f32 = utils.infinity,
+    max: f32 = -utils.infinity,
 
     pub fn contains(self: Interval, x: f32) bool {
         return self.min <= x and x <= self.max;
@@ -33,9 +33,9 @@ pub const Interval = struct {
     }
 };
 
-pub const empty = Interval{ .min = rtweekend.infinity, .max = -rtweekend.infinity };
+pub const empty = Interval{ .min = utils.infinity, .max = -utils.infinity };
 
-pub const universe = Interval{ .min = -rtweekend.infinity, .max = rtweekend.infinity };
+pub const universe = Interval{ .min = -utils.infinity, .max = utils.infinity };
 
 // NOTE: I couldn't find this on the original.
 // I'm assuming the implementation is this.
