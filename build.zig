@@ -5,6 +5,7 @@ const zgpu = @import("zgpu");
 const zpool = @import("zpool");
 const zstbi = @import("zstbi");
 const zmath = @import("zmath");
+const zopengl = @import("zopengl");
 
 const content_dir = "content/";
 
@@ -34,6 +35,7 @@ pub fn build(b: *std.Build) !void {
         .options = .{ .backend = .glfw_wgpu },
     });
 
+    const zopengl_pkg = zopengl.package(b, target, optimize, .{});
     // const zgui_pkg = zgui.package(b, target, optimize, .{});
     // const zmath_pkg = zmath.package(b, target, optimize, .{});
     const zglfw_pkg = zglfw.package(b, target, optimize, .{});
@@ -48,6 +50,7 @@ pub fn build(b: *std.Build) !void {
     zgpu_pkg.link(exe);
     zglfw_pkg.link(exe);
     zstbi_pkg.link(exe);
+    zopengl_pkg.link(exe);
     // zmath_pkg.link(exe);
     // zpool_pkg.link(exe);
 

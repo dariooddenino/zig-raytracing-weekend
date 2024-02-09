@@ -17,10 +17,10 @@ const Vec3 = vec.Vec3;
 pub const Object = struct {
     position: Position,
     scale: Vec3,
-    material: *Material,
-    shape: *Shape,
+    material: Material,
+    shape: Shape,
 
-    pub fn init(position: Position, scale: Vec3, material: *Material, shape: *Shape) Object {
+    pub fn init(position: Position, scale: Vec3, material: Material, shape: Shape) Object {
         return Object{ position, scale, material, shape };
     }
 

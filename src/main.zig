@@ -1,31 +1,52 @@
 const std = @import("std");
+const gl = @import("zopengl").bindings;
 const zglfw = @import("zglfw");
 const zgpu = @import("zgpu");
 const zgui = @import("zgui");
 const zstbi = @import("zstbi");
 
 const engines = @import("engines.zig");
+const materials = @import("materials.zig");
 
+const Engine = engines.Engine;
 const GUI = @import("gui.zig").GUI;
 const Light = @import("lights.zig").Light;
+const Material = materials.Material;
 const Object = @import("objects.zig").Object;
-const Engine = engines.Engine;
 
 const content_dir = @import("build_options").content_dir;
 const embedded_font_data = @embedFile("./FiraCode-Medium.ttf");
 const window_title = "HooRay";
-const window_width = 1600;
-const window_height = 1000;
+
+// TODO not a big fan of having these here.
+var window_width: i32 = 1600;
+var window_height: i32 = 1000;
+var screen_texture: gl.Uint = undefined;
+var refresh_required: bool = false;
+var mouse_absorbe3d: bool = false;
+
+pub fn framebufferSizeCallback(_: *zglfw.Window, width: i32, height: i32) callconv(.C) void {
+    gl.viewport(0, 0, width, height);
+    window_width = width;
+    window_height = height;
+
+    gl.bindTexture(gl.TEXTURE_2D, screen_texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, window_width, window_height, 0, gl.RGBA, gl.FLOAT, null);
+
+    refresh_required = true;
+}
 
 pub const HooRayState = struct {
     allocator: std.mem.Allocator,
     gui: *GUI,
+    // These three should be somewhere else maybe
     objects: std.ArrayList(Object),
     lights: std.ArrayList(Light),
+    plane_material: *Material,
     engine: *Engine,
 };
 
-fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*HooRayState {
+fn init(allocator: std.mem.Allocator, window: *zglfw.Window) !*HooRayState {
     const gui = try allocator.create(GUI);
     gui.* = try GUI.init(allocator, window);
     const hooray = try allocator.create(HooRayState);
@@ -35,7 +56,9 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*HooRayState {
 
     const engine = try allocator.create(Engine);
     // TODO until I know what to do
-    engine.* = Engine{ .weekend = engines.Weekend{} };
+    // engine.* = Engine{ .weekend = engines.Weekend{} };
+
+    const plane_material = try allocator.create(Material);
 
     hooray.* = .{
         .allocator = allocator,
@@ -43,13 +66,14 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*HooRayState {
         .objects = objects,
         .lights = lights,
         .engine = engine,
+        .plane_material = plane_material,
     };
 
     return hooray;
 }
 
 // TODO I need to come back here to do some more proper cleanup
-fn destroy(allocator: std.mem.Allocator, hooray: *HooRayState) void {
+fn deinit(allocator: std.mem.Allocator, hooray: *HooRayState) void {
     zgui.backend.deinit();
     zgui.plot.deinit();
     zgui.deinit();
@@ -127,8 +151,10 @@ pub fn main() !void {
     zstbi.init(allocator);
     defer zstbi.deinit();
 
-    const hooray = try create(allocator, window);
-    defer destroy(allocator, hooray);
+    const hooray = try init(allocator, window);
+    defer deinit(allocator, hooray);
+
+    _ = window.setFramebufferSizeCallback(framebufferSizeCallback);
 
     while (!window.shouldClose() and window.getKey(.escape) != .press) {
         zglfw.pollEvents();

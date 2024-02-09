@@ -4,6 +4,7 @@ const utils = @import("utils.zig");
 pub const Color = @Vector(3, f32);
 pub const Position = @Vector(3, f32);
 pub const Vec3 = @Vector(3, f32);
+pub const Vec2 = @Vector(2, f32);
 
 pub inline fn zero() Vec3 {
     return Vec3{ 0, 0, 0 };
@@ -17,9 +18,25 @@ pub inline fn lengthSquared(u: Vec3) f32 {
     return u[0] * u[0] + u[1] * u[1] + u[2] * u[2];
 }
 
+pub inline fn length2(u: Vec2) f32 {
+    return @sqrt(lengthSquared2(u));
+}
+
+pub inline fn lengthSquared2(u: Vec2) f32 {
+    return u[0] * u[0] + u[1] * u[1];
+}
+
+pub fn mixFloat(x: Vec2, y: Vec2, a: f32) Vec2 {
+    return x * splat2(1.0 - a) + y * splat2(a);
+}
+
 pub inline fn nearZero(u: Vec3) bool {
     const s = 1e-8;
     return @abs(u[0]) < s and @abs(u[1]) < s and @abs(u[2]) < s;
+}
+
+pub inline fn splat2(v: f32) Vec2 {
+    return @as(Vec2, @splat(v));
 }
 
 pub inline fn splat3(v: f32) Vec3 {

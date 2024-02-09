@@ -20,6 +20,7 @@
         .zgui = .{ .path = "libs/zgui" },
         .zpool = .{ .path = "libs/zpool" },
         .zstbi = .{ .path = "libs/zstbi" },
+        .zopengl = .{ .path = "libs/zopengl" },
         .system_sdk = .{ .path = "libs/system-sdk" },
         .zmath = .{ .path = "libs/zmath" },
         .dawn_x86_64_windows_gnu = .{
