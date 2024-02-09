@@ -43,6 +43,7 @@ pub const Hittable = union(enum) {
     translate: Translate,
     rotate_y: RotateY,
     constant_medium: ConstantMedium,
+    round_box: RoundBox,
     tree: BVHTree,
 
     pub fn hit(self: Hittable, r: rays.Ray, ray_t: Interval) ?HitRecord {
@@ -144,6 +145,50 @@ pub const Sphere = struct {
         rec.mat = self.mat;
 
         return rec;
+    }
+};
+
+pub const RoundBox = struct {
+    center: Vec3,
+    size: Vec3,
+    rad: f32,
+    mat: Material,
+    bounding_box: Aabb = Aabb{},
+
+    pub fn boundingBox(self: RoundBox) Aabb {
+        return self.bounding_box;
+    }
+
+    // TODO bounding box
+    pub fn init(center: Vec3, size: Vec3, rad: f32, mat: Material) Hittable {
+        const ba = center - size;
+        const bb = center + size;
+        const bounding_box = Aabb.fromPoints(ba, bb);
+        return Hittable{ .round_box = RoundBox{ .center = center, .size = size, .rad = rad, .mat = mat, .bounding_box = bounding_box } };
+    }
+
+    // TODO what was ray_t for?
+    pub fn hit(
+        self: RoundBox,
+        r: Ray,
+        ray_t: Interval,
+    ) ?HitRecord {
+        // Translate the ray to the box's local coordinates.
+        var ray = r;
+        ray.origin -= self.center;
+        ray.direction -= self.center;
+
+        const m = 1 / ray.direction;
+        const n = m * ray.origin;
+        const k = @abs(m) * (self.size - self.rad);
+        const t1 = -n - k;
+        const t2 = -n + k;
+        const tN = @max(@max(t1.x, t1.y), t1.z);
+        const tF = @min(@min(t2.x, t2.y), t2.z);
+        if (tN > tF or tF < 0) return null;
+        var t = tN;
+
+        // TODO complete the rest.
     }
 };
 
